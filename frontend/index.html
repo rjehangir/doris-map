@@ -28,6 +28,9 @@
             font-size: 0.85rem; min-width: 44px; min-height: 44px;
         }
         .top-bar button:hover { background: rgba(255,255,255,0.25); }
+        .wake-lock-btn { display: flex; align-items: center; gap: 6px; font-size: 0.75rem !important; }
+        .wake-lock-btn svg { width: 18px; height: 18px; fill: currentColor; }
+        .wake-lock-btn.active { background: rgba(34,197,94,0.3) !important; }
 
         /* Detail bar */
         .detail-bar {
@@ -95,6 +98,18 @@
         .telemetry-item .unit { font-size: 0.65rem; color: #999; }
         .track-info { padding: 2px 14px 10px; font-size: 0.75rem; color: #666; }
 
+        /* Action row in detail bar */
+        .action-row { display: flex; gap: 8px; padding: 0 10px 10px; }
+        .action-row button {
+            flex: 1; padding: 10px; border-radius: 8px; font-weight: 600;
+            font-size: 0.82rem; cursor: pointer; min-height: 44px;
+            border: 1.5px solid #e5e7eb; background: #fff; color: #333;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+            transition: background 0.15s;
+        }
+        .action-row button:active { background: #f3f4f6; }
+        .action-row button svg { width: 16px; height: 16px; fill: currentColor; flex-shrink: 0; }
+
         /* Locate me button */
         .locate-btn {
             position: fixed; z-index: 1001;
@@ -141,6 +156,14 @@
         }
         .distance-tooltip::before { border: none !important; }
 
+        /* Stale data warning banner */
+        .stale-banner {
+            padding: 6px 14px; font-size: 0.78rem; font-weight: 600;
+            text-align: center; display: none; z-index: 1;
+        }
+        .stale-banner.warn { display: block; background: #fef3c7; color: #92400e; }
+        .stale-banner.danger { display: block; background: #fee2e2; color: #991b1b; }
+
         .hidden { display: none !important; }
     </style>
 </head>
@@ -151,8 +174,12 @@
             <h1>DORIS Tracker</h1>
             <div class="subtitle" id="last-update">Loading...</div>
         </div>
-        <div></div>
+        <button id="wake-lock-btn" class="wake-lock-btn hidden" onclick="toggleWakeLock()" title="Keep screen on">
+            <svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>
+            <span>Screen</span>
+        </button>
     </div>
+    <div class="stale-banner" id="stale-banner"></div>
     <div id="map"></div>
 </div>
 
@@ -167,6 +194,7 @@
     <div class="peek-row" id="peek-row"></div>
     <div class="expanded-content" id="expanded-content">
         <div class="telemetry-grid" id="telemetry-grid"></div>
+        <div class="action-row" id="action-row"></div>
         <div class="track-info" id="track-info"></div>
     </div>
 </div>
@@ -188,10 +216,21 @@ function initMap() {
     map = L.map('map', { zoomControl: false }).setView([21.3, -157.8], 10);
     L.control.zoom({ position: 'topleft' }).addTo(map);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    const streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; OSM &copy; CARTO',
         maxZoom: 20,
     }).addTo(map);
+
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; Esri',
+        maxZoom: 19,
+    });
+
+    L.control.layers(
+        { 'Street': streetLayer, 'Satellite': satelliteLayer },
+        null,
+        { position: 'topright' }
+    ).addTo(map);
 
     markersLayer = L.layerGroup().addTo(map);
     trackLayer = L.layerGroup().addTo(map);
@@ -435,6 +474,8 @@ function renderOverview(devices) {
 
     if (userLatLng) bounds.push([userLatLng.lat, userLatLng.lng]);
     if (bounds.length) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+
+    updateStaleBannerForOverview(devices);
 }
 
 // ── Marker Click → show detail bar ──
@@ -562,6 +603,49 @@ function renderTrack(messages, device) {
     ).join('');
 
     document.getElementById('track-info').textContent = `${messages.length} messages tracked`;
+
+    updateStaleBanner(latest.created_at);
+    renderActions(latest, name);
+}
+
+function renderActions(latest, deviceName) {
+    const lat = latest.latitude.toFixed(6);
+    const lon = latest.longitude.toFixed(6);
+    const coordStr = `${lat}, ${lon}`;
+
+    const isApple = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
+    const mapsUrl = isApple
+        ? `https://maps.apple.com/?ll=${lat},${lon}&q=${encodeURIComponent(deviceName)}`
+        : `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+
+    document.getElementById('action-row').innerHTML = `
+        <button onclick="copyCoords('${coordStr}', this)">
+            <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+            <span>Copy Coords</span>
+        </button>
+        <button onclick="window.open('${mapsUrl}', '_blank')">
+            <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+            <span>Open in Maps</span>
+        </button>
+    `;
+}
+
+async function copyCoords(text, btn) {
+    try {
+        await navigator.clipboard.writeText(text);
+        const orig = btn.querySelector('span').textContent;
+        btn.querySelector('span').textContent = 'Copied!';
+        setTimeout(() => { btn.querySelector('span').textContent = orig; }, 1500);
+    } catch (e) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        btn.querySelector('span').textContent = 'Copied!';
+        setTimeout(() => { btn.querySelector('span').textContent = 'Copy Coords'; }, 1500);
+    }
 }
 
 // ── Bar swipe / tap ──
@@ -606,6 +690,38 @@ barHandle.addEventListener('click', () => {
     else if (barState === 'expanded') setBarState('peek');
 });
 
+// ── Stale Data Banner ──
+
+const STALE_WARN_MINUTES = 30;
+const STALE_DANGER_MINUTES = 120;
+
+function updateStaleBanner(createdAt) {
+    const banner = document.getElementById('stale-banner');
+    if (!createdAt) {
+        banner.className = 'stale-banner';
+        return;
+    }
+    const ageMin = moment().diff(moment(createdAt), 'minutes');
+    if (ageMin >= STALE_DANGER_MINUTES) {
+        banner.className = 'stale-banner danger';
+        banner.textContent = `Last report ${moment(createdAt).fromNow()} \u2014 position unreliable`;
+    } else if (ageMin >= STALE_WARN_MINUTES) {
+        banner.className = 'stale-banner warn';
+        banner.textContent = `Last report ${moment(createdAt).fromNow()} \u2014 position may have drifted`;
+    } else {
+        banner.className = 'stale-banner';
+    }
+}
+
+function updateStaleBannerForOverview(devices) {
+    const withMessages = devices.filter(d => d.latest_message && d.latest_message.created_at);
+    if (!withMessages.length) { updateStaleBanner(null); return; }
+    const oldest = withMessages.reduce((a, b) =>
+        moment(a.latest_message.created_at).isBefore(moment(b.latest_message.created_at)) ? a : b
+    );
+    updateStaleBanner(oldest.latest_message.created_at);
+}
+
 // ── Polling ──
 
 function updateTimestamp() {
@@ -626,10 +742,48 @@ async function poll() {
     updateTimestamp();
 }
 
+// ── Wake Lock ──
+
+let wakeLock = null;
+const wakeLockBtn = document.getElementById('wake-lock-btn');
+
+function initWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    wakeLockBtn.classList.remove('hidden');
+    requestWakeLock();
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && wakeLock !== null) requestWakeLock();
+    });
+}
+
+async function requestWakeLock() {
+    try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLockBtn.classList.add('active');
+        wakeLock.addEventListener('release', () => {
+            if (wakeLock) wakeLockBtn.classList.remove('active');
+        });
+    } catch (e) {
+        wakeLockBtn.classList.remove('active');
+    }
+}
+
+async function toggleWakeLock() {
+    if (wakeLock) {
+        const ref = wakeLock;
+        wakeLock = null;
+        await ref.release();
+        wakeLockBtn.classList.remove('active');
+    } else {
+        await requestWakeLock();
+    }
+}
+
 // ── Init ──
 
 initMap();
 initGeolocation();
+initWakeLock();
 fetchDevices().then(devices => { renderOverview(devices); updateTimestamp(); });
 setInterval(poll, POLL_INTERVAL_MS);
 </script>
