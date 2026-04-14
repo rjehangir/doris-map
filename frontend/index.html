@@ -2,48 +2,80 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>DORIS Tracker</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; overflow: hidden; }
 
         #app { height: 100%; display: flex; flex-direction: column; }
-        #map { flex: 1; }
+        #map { flex: 1; z-index: 0; }
 
+        /* Top bar */
         .top-bar {
-            background: #1a1a2e; color: #fff; padding: 10px 20px;
+            background: #1a1a2e; color: #fff; padding: 8px 12px;
             display: flex; align-items: center; justify-content: space-between;
-            z-index: 1000;
+            z-index: 1001; min-height: 44px;
         }
-        .top-bar h1 { font-size: 1.2rem; font-weight: 600; margin: 0; }
-        .top-bar .subtitle { font-size: 0.8rem; opacity: 0.7; }
-        .top-bar button { background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+        .top-bar h1 { font-size: 1rem; font-weight: 600; margin: 0; }
+        .top-bar .subtitle { font-size: 0.72rem; opacity: 0.7; }
+        .top-bar button {
+            background: rgba(255,255,255,0.15); border: none; color: #fff;
+            padding: 8px 14px; border-radius: 6px; cursor: pointer;
+            font-size: 0.85rem; min-width: 44px; min-height: 44px;
+        }
         .top-bar button:hover { background: rgba(255,255,255,0.25); }
 
-        .side-panel {
-            position: absolute; top: 60px; right: 10px; z-index: 1000;
-            background: rgba(255,255,255,0.95); border-radius: 10px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.15); width: 320px;
-            max-height: calc(100vh - 80px); overflow-y: auto;
-            backdrop-filter: blur(10px);
+        /* Bottom sheet */
+        .bottom-sheet {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            z-index: 1000;
+            background: rgba(255,255,255,0.97);
+            border-radius: 16px 16px 0 0;
+            box-shadow: 0 -2px 16px rgba(0,0,0,0.12);
+            backdrop-filter: blur(12px);
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            will-change: transform;
+            max-height: 85vh;
         }
-        .side-panel h2 { font-size: 1rem; padding: 14px 16px 8px; margin: 0; color: #333; }
+        .bottom-sheet.collapsed { transform: translateY(calc(100% - 52px)); }
+        .bottom-sheet.half { transform: translateY(calc(100% - 45vh)); }
+        .bottom-sheet.expanded { transform: translateY(0); }
 
-        .device-card {
-            padding: 12px 16px; border-bottom: 1px solid #eee; cursor: pointer;
-            transition: background 0.15s;
+        .sheet-handle {
+            display: flex; align-items: center; justify-content: center;
+            padding: 10px 0 6px; cursor: grab; touch-action: none;
         }
-        .device-card:hover { background: #f0f4ff; }
+        .sheet-handle-bar {
+            width: 36px; height: 4px; border-radius: 2px;
+            background: #ccc;
+        }
+        .sheet-summary {
+            text-align: center; font-size: 0.8rem; color: #888;
+            padding: 0 16px 8px; font-weight: 500;
+        }
+        .sheet-content {
+            overflow-y: auto; padding-bottom: env(safe-area-inset-bottom, 16px);
+        }
+        .bottom-sheet.collapsed .sheet-content { display: none; }
+        .bottom-sheet.half .sheet-content { max-height: calc(45vh - 70px); }
+        .bottom-sheet.expanded .sheet-content { max-height: calc(85vh - 52px); }
+
+        /* Device cards */
+        .device-card {
+            padding: 14px 16px; border-bottom: 1px solid #f0f0f0;
+            cursor: pointer; transition: background 0.15s;
+            min-height: 56px; display: flex; flex-direction: column; justify-content: center;
+        }
+        .device-card:active { background: #e8eeff; }
         .device-card:last-child { border-bottom: none; }
         .device-name { font-weight: 600; font-size: 0.95rem; }
-        .device-meta { font-size: 0.78rem; color: #666; margin-top: 2px; }
-        .device-coords { font-size: 0.75rem; color: #888; font-family: monospace; }
+        .device-meta { font-size: 0.78rem; color: #666; margin-top: 3px; }
+        .device-distance { font-size: 0.75rem; color: #3b82f6; margin-top: 2px; }
+        .device-coords { font-size: 0.72rem; color: #999; font-family: monospace; margin-top: 1px; }
 
         .status-dot {
             display: inline-block; width: 10px; height: 10px;
@@ -54,36 +86,62 @@
         .status-amber { background: #f59e0b; }
         .status-gray { background: #9ca3af; }
 
-        .detail-panel {
-            position: absolute; top: 60px; right: 10px; z-index: 1000;
-            background: rgba(255,255,255,0.95); border-radius: 10px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.15); width: 340px;
-            max-height: calc(100vh - 80px); overflow-y: auto;
-            backdrop-filter: blur(10px);
-        }
-        .detail-panel h2 { font-size: 1.05rem; padding: 14px 16px 4px; margin: 0; }
-        .detail-panel .imei-label { font-size: 0.75rem; color: #888; padding: 0 16px 10px; font-family: monospace; }
+        /* Detail view */
+        .detail-header { padding: 4px 16px 8px; }
+        .detail-header h2 { font-size: 1.05rem; margin: 0; }
+        .detail-header .imei-label { font-size: 0.72rem; color: #888; font-family: monospace; margin-top: 2px; }
 
         .telemetry-grid {
             display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
             background: #eee; margin: 0 12px 12px; border-radius: 8px; overflow: hidden;
         }
-        .telemetry-item {
-            background: #fff; padding: 10px 12px; text-align: center;
-        }
-        .telemetry-item .label { font-size: 0.65rem; text-transform: uppercase; color: #888; letter-spacing: 0.5px; }
-        .telemetry-item .value { font-size: 1.1rem; font-weight: 600; color: #333; margin-top: 2px; }
+        .telemetry-item { background: #fff; padding: 10px 8px; text-align: center; }
+        .telemetry-item .label { font-size: 0.7rem; text-transform: uppercase; color: #888; letter-spacing: 0.5px; }
+        .telemetry-item .value { font-size: 1.2rem; font-weight: 600; color: #333; margin-top: 2px; }
         .telemetry-item .unit { font-size: 0.7rem; color: #999; }
+        .track-info { padding: 4px 16px 14px; font-size: 0.78rem; color: #666; }
 
-        .track-info {
-            padding: 8px 16px 14px; font-size: 0.78rem; color: #666;
+        /* Locate me button */
+        .locate-btn {
+            position: fixed; z-index: 1001;
+            right: 12px; bottom: 62px;
+            width: 44px; height: 44px; border-radius: 50%;
+            background: #fff; border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: bottom 0.3s cubic-bezier(0.25,0.46,0.45,0.94);
         }
+        .locate-btn svg { width: 22px; height: 22px; fill: #3b82f6; }
+        .locate-btn:active { background: #f0f4ff; }
+
+        /* Pulsing blue dot for user location */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+        .user-dot-wrapper { position: relative; width: 16px; height: 16px; }
+        .user-dot {
+            width: 16px; height: 16px; background: #3b82f6; border-radius: 50%;
+            border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+            position: absolute; top: 0; left: 0; z-index: 2;
+        }
+        .user-dot-pulse {
+            width: 16px; height: 16px; background: rgba(59,130,246,0.35);
+            border-radius: 50%; position: absolute; top: 0; left: 0; z-index: 1;
+            animation: pulse-ring 2s ease-out infinite;
+        }
+
+        /* Distance line tooltip */
+        .distance-tooltip {
+            background: rgba(30,30,60,0.88) !important; color: #fff !important;
+            border: none !important; border-radius: 8px !important;
+            padding: 6px 10px !important; font-size: 0.82rem !important;
+            font-weight: 500 !important; box-shadow: 0 2px 8px rgba(0,0,0,0.25) !important;
+            white-space: nowrap !important;
+        }
+        .distance-tooltip::before { border: none !important; }
 
         .hidden { display: none !important; }
-
-        @media (max-width: 600px) {
-            .side-panel, .detail-panel { width: calc(100vw - 20px); right: 10px; left: 10px; }
-        }
     </style>
 </head>
 <body>
@@ -94,21 +152,33 @@
             <div class="subtitle" id="last-update">Loading...</div>
         </div>
         <div>
-            <button id="btn-back" class="hidden" onclick="showSummary()">&#8592; All Devices</button>
+            <button id="btn-back" class="hidden" onclick="showSummary()">&#8592; Back</button>
         </div>
     </div>
     <div id="map"></div>
+</div>
 
-    <div class="side-panel" id="summary-panel">
-        <h2>Devices</h2>
-        <div id="device-list">Loading...</div>
+<button class="locate-btn" id="locate-btn" onclick="locateUser()" title="Show my location">
+    <svg viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+</button>
+
+<div class="bottom-sheet half" id="bottom-sheet">
+    <div class="sheet-handle" id="sheet-handle">
+        <div class="sheet-handle-bar"></div>
     </div>
-
-    <div class="detail-panel hidden" id="detail-panel">
-        <h2 id="detail-name"></h2>
-        <div class="imei-label" id="detail-imei"></div>
-        <div class="telemetry-grid" id="telemetry-grid"></div>
-        <div class="track-info" id="track-info"></div>
+    <div class="sheet-summary" id="sheet-summary">Loading...</div>
+    <div class="sheet-content" id="sheet-content">
+        <div id="summary-content">
+            <div id="device-list"></div>
+        </div>
+        <div id="detail-content" class="hidden">
+            <div class="detail-header">
+                <h2 id="detail-name"></h2>
+                <div class="imei-label" id="detail-imei"></div>
+            </div>
+            <div class="telemetry-grid" id="telemetry-grid"></div>
+            <div class="track-info" id="track-info"></div>
+        </div>
     </div>
 </div>
 
@@ -116,23 +186,132 @@
 const LOW_VOLTAGE_THRESHOLD = 12.0;
 const POLL_INTERVAL_MS = 30000;
 
-let map, markersLayer, trackLayer;
+let map, markersLayer, trackLayer, lineLayer;
 let currentView = 'summary';
 let currentImei = null;
 let devicesData = [];
+let userLatLng = null;
+let userMarker = null;
+let activeLine = null;
+let activeTooltip = null;
+
+// ── Map ──
 
 function initMap() {
     map = L.map('map', { zoomControl: false }).setView([21.3, -157.8], 10);
     L.control.zoom({ position: 'topleft' }).addTo(map);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        attribution: '&copy; OSM &copy; CARTO',
         maxZoom: 20,
     }).addTo(map);
 
     markersLayer = L.layerGroup().addTo(map);
     trackLayer = L.layerGroup().addTo(map);
+    lineLayer = L.layerGroup().addTo(map);
+
+    map.on('click', () => {
+        clearDistanceLine();
+        setSheetState('collapsed');
+    });
 }
+
+// ── Geolocation ──
+
+function initGeolocation() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.watchPosition(
+        pos => {
+            userLatLng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+            updateUserMarker();
+        },
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
+    );
+}
+
+function updateUserMarker() {
+    if (!userLatLng) return;
+    if (userMarker) {
+        userMarker.setLatLng(userLatLng);
+    } else {
+        const icon = L.divIcon({
+            className: '',
+            html: '<div class="user-dot-wrapper"><div class="user-dot-pulse"></div><div class="user-dot"></div></div>',
+            iconSize: [16, 16],
+            iconAnchor: [8, 8],
+        });
+        userMarker = L.marker(userLatLng, { icon, zIndexOffset: 1000, interactive: false }).addTo(map);
+    }
+}
+
+function locateUser() {
+    if (userLatLng) {
+        map.setView(userLatLng, 14);
+    } else if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            pos => {
+                userLatLng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+                updateUserMarker();
+                map.setView(userLatLng, 14);
+            },
+            () => {}
+        );
+    }
+}
+
+// ── Distance / Bearing ──
+
+function compassBearing(from, to) {
+    const dLon = (to.lng - from.lng) * Math.PI / 180;
+    const lat1 = from.lat * Math.PI / 180;
+    const lat2 = to.lat * Math.PI / 180;
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    const deg = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+    return { degrees: Math.round(deg), label: dirs[Math.round(deg / 45) % 8] };
+}
+
+function formatDistance(meters) {
+    if (meters >= 1000) return (meters / 1000).toFixed(1) + ' km';
+    return Math.round(meters) + ' m';
+}
+
+function drawDistanceLine(deviceLatLng) {
+    clearDistanceLine();
+    if (!userLatLng) return;
+
+    const dist = userLatLng.distanceTo(deviceLatLng);
+    const bearing = compassBearing(userLatLng, deviceLatLng);
+    const midLat = (userLatLng.lat + deviceLatLng.lat) / 2;
+    const midLng = (userLatLng.lng + deviceLatLng.lng) / 2;
+
+    activeLine = L.polyline([userLatLng, deviceLatLng], {
+        color: '#3b82f6', weight: 2, dashArray: '8, 6', opacity: 0.8,
+    }).addTo(lineLayer);
+
+    activeTooltip = L.tooltip({
+        permanent: true, direction: 'center', className: 'distance-tooltip', offset: [0, 0],
+    })
+    .setContent(`${formatDistance(dist)} &middot; ${bearing.degrees}° ${bearing.label}`)
+    .setLatLng([midLat, midLng])
+    .addTo(lineLayer);
+}
+
+function clearDistanceLine() {
+    lineLayer && lineLayer.clearLayers();
+    activeLine = null;
+    activeTooltip = null;
+}
+
+function distanceFromUser(lat, lon) {
+    if (!userLatLng) return '';
+    const d = userLatLng.distanceTo(L.latLng(lat, lon));
+    return formatDistance(d);
+}
+
+// ── Markers ──
 
 function getStatusClass(device) {
     if (!device.latest_message) return 'status-gray';
@@ -157,9 +336,10 @@ function makeMarkerIcon(color, label) {
             padding:4px 8px; border-radius:12px; white-space:nowrap;
             box-shadow:0 2px 6px rgba(0,0,0,0.3); border:2px solid #fff;
             text-align:center; line-height:1.3;
+            transform:translate(-50%,-50%);
         ">${label}</div>`,
-        iconSize: null,
-        iconAnchor: [40, 14],
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
     });
 }
 
@@ -174,6 +354,8 @@ function makeTrackPointIcon(color) {
         iconAnchor: [6, 6],
     });
 }
+
+// ── API ──
 
 async function fetchDevices() {
     try {
@@ -196,8 +378,13 @@ async function fetchTrack(imei) {
     }
 }
 
+// ── Summary View ──
+
 function renderSummary(devices) {
     const list = document.getElementById('device-list');
+    const onlineCount = devices.filter(d => d.latest_message).length;
+    document.getElementById('sheet-summary').textContent = `${onlineCount} device${onlineCount !== 1 ? 's' : ''} reporting`;
+
     if (!devices.length) {
         list.innerHTML = '<div style="padding:16px;color:#888;">No devices configured.</div>';
         return;
@@ -207,20 +394,24 @@ function renderSummary(devices) {
         const msg = d.latest_message;
         const statusCls = getStatusClass(d);
         const timeAgo = msg && msg.created_at ? moment(msg.created_at).fromNow() : 'No data';
-        const coords = msg ? `${msg.latitude.toFixed(6)}, ${msg.longitude.toFixed(6)}` : '--';
         const voltage = msg ? `${msg.battery_voltage.toFixed(2)}V` : '--';
         const depth = msg ? `${msg.max_depth.toFixed(1)}m` : '--';
         const leak = msg && msg.leak_detected ? ' &middot; <span style="color:#ef4444;font-weight:600;">LEAK</span>' : '';
+        const dist = msg ? distanceFromUser(msg.latitude, msg.longitude) : '';
+        const distHtml = dist ? `<div class="device-distance">${dist} away</div>` : '';
+        const coords = msg ? `${msg.latitude.toFixed(6)}, ${msg.longitude.toFixed(6)}` : '--';
 
-        return `<div class="device-card" onclick="showDetail('${d.imei}')">
+        return `<div class="device-card" onclick="onDeviceCardClick('${d.imei}')">
             <div class="device-name"><span class="status-dot ${statusCls}"></span>${d.name}</div>
-            <div class="device-meta">${timeAgo} &middot; ${voltage} &middot; Max depth: ${depth}${leak}</div>
+            <div class="device-meta">${timeAgo} &middot; ${voltage} &middot; Depth: ${depth}${leak}</div>
+            ${distHtml}
             <div class="device-coords">${coords}</div>
         </div>`;
     }).join('');
 
     markersLayer.clearLayers();
     trackLayer.clearLayers();
+    clearDistanceLine();
 
     const bounds = [];
     devices.forEach(d => {
@@ -229,23 +420,42 @@ function renderSummary(devices) {
         const lon = d.latest_message.longitude;
         const color = getStatusColor(d);
         const marker = L.marker([lat, lon], { icon: makeMarkerIcon(color, d.name) });
-        marker.bindPopup(`<b>${d.name}</b><br>IMEI: ${d.imei}<br>${d.latest_message.battery_voltage.toFixed(2)}V`);
-        marker.on('click', () => showDetail(d.imei));
+        marker.on('click', () => onMarkerClick(d));
         markersLayer.addLayer(marker);
         bounds.push([lat, lon]);
     });
 
-    if (bounds.length) {
-        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
-    }
+    if (userLatLng) bounds.push([userLatLng.lat, userLatLng.lng]);
+    if (bounds.length) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
 }
+
+function onMarkerClick(device) {
+    if (!device.latest_message) return;
+    const deviceLL = L.latLng(device.latest_message.latitude, device.latest_message.longitude);
+    drawDistanceLine(deviceLL);
+    setSheetState('half');
+    showDetail(device.imei);
+}
+
+function onDeviceCardClick(imei) {
+    const device = devicesData.find(d => d.imei === imei);
+    if (device && device.latest_message) {
+        const deviceLL = L.latLng(device.latest_message.latitude, device.latest_message.longitude);
+        drawDistanceLine(deviceLL);
+    }
+    showDetail(imei);
+}
+
+// ── Detail View ──
 
 async function showSummary() {
     currentView = 'summary';
     currentImei = null;
-    document.getElementById('summary-panel').classList.remove('hidden');
-    document.getElementById('detail-panel').classList.add('hidden');
+    clearDistanceLine();
+    document.getElementById('summary-content').classList.remove('hidden');
+    document.getElementById('detail-content').classList.add('hidden');
     document.getElementById('btn-back').classList.add('hidden');
+    setSheetState('half');
 
     const devices = await fetchDevices();
     renderSummary(devices);
@@ -255,9 +465,10 @@ async function showSummary() {
 async function showDetail(imei) {
     currentView = 'detail';
     currentImei = imei;
-    document.getElementById('summary-panel').classList.add('hidden');
-    document.getElementById('detail-panel').classList.remove('hidden');
+    document.getElementById('summary-content').classList.add('hidden');
+    document.getElementById('detail-content').classList.remove('hidden');
     document.getElementById('btn-back').classList.remove('hidden');
+    setSheetState('half');
 
     const device = devicesData.find(d => d.imei === imei);
     const name = device ? device.name : imei;
@@ -274,6 +485,9 @@ function renderTrack(messages, device) {
     markersLayer.clearLayers();
     trackLayer.clearLayers();
 
+    const name = device ? device.name : '?';
+    document.getElementById('sheet-summary').textContent = name;
+
     if (!messages.length) {
         document.getElementById('telemetry-grid').innerHTML = '<div class="telemetry-item" style="grid-column:1/-1;"><div class="value">No messages</div></div>';
         document.getElementById('track-info').textContent = '';
@@ -282,7 +496,6 @@ function renderTrack(messages, device) {
 
     const coords = messages.map(m => [m.latitude, m.longitude]);
 
-    // Draw polyline segments colored by recency
     for (let i = 0; i < coords.length - 1; i++) {
         const pct = i / Math.max(coords.length - 1, 1);
         const r = Math.round(100 + 55 * (1 - pct));
@@ -291,15 +504,13 @@ function renderTrack(messages, device) {
         L.polyline([coords[i], coords[i + 1]], { color, weight: 3, opacity: 0.8 }).addTo(trackLayer);
     }
 
-    // Point markers
     messages.forEach((m, i) => {
         const pct = i / Math.max(messages.length - 1, 1);
         const isLatest = i === messages.length - 1;
         const color = isLatest ? getStatusColor(device || {}) : `rgba(100, 100, 180, ${0.4 + 0.6 * pct})`;
 
         if (isLatest) {
-            const label = device ? device.name : m.device_imei;
-            L.marker([m.latitude, m.longitude], { icon: makeMarkerIcon(color, label) }).addTo(markersLayer);
+            L.marker([m.latitude, m.longitude], { icon: makeMarkerIcon(color, name) }).addTo(markersLayer);
         } else {
             L.marker([m.latitude, m.longitude], { icon: makeTrackPointIcon(color) })
                 .bindPopup(`<b>#${i + 1}</b><br>${m.latitude.toFixed(6)}, ${m.longitude.toFixed(6)}<br>${m.battery_voltage.toFixed(2)}V &middot; ${m.max_depth.toFixed(1)}m<br>${m.transmit_time}`)
@@ -307,12 +518,15 @@ function renderTrack(messages, device) {
         }
     });
 
-    map.fitBounds(coords, { padding: [60, 60], maxZoom: 16 });
+    const fitBounds = [...coords];
+    if (userLatLng) fitBounds.push([userLatLng.lat, userLatLng.lng]);
+    map.fitBounds(fitBounds, { padding: [50, 50], maxZoom: 16 });
 
-    // Telemetry panel
     const latest = messages[messages.length - 1];
-    const grid = document.getElementById('telemetry-grid');
-    grid.innerHTML = [
+    const dist = distanceFromUser(latest.latitude, latest.longitude);
+    const distItem = dist ? { label: 'Distance', value: dist, unit: '' } : null;
+
+    const items = [
         { label: 'Latitude', value: latest.latitude.toFixed(6), unit: '°' },
         { label: 'Longitude', value: latest.longitude.toFixed(6), unit: '°' },
         { label: 'Altitude', value: latest.altitude.toFixed(1), unit: 'm' },
@@ -321,13 +535,74 @@ function renderTrack(messages, device) {
         { label: 'Max Depth', value: latest.max_depth.toFixed(1), unit: 'm' },
         { label: 'Leak', value: latest.leak_detected ? 'YES' : 'No', unit: '' },
         { label: 'Last Update', value: latest.created_at ? moment(latest.created_at).fromNow() : '--', unit: '' },
-    ].map(t => `<div class="telemetry-item">
+    ];
+    if (distItem) items.push(distItem);
+
+    const grid = document.getElementById('telemetry-grid');
+    grid.innerHTML = items.map(t => `<div class="telemetry-item">
         <div class="label">${t.label}</div>
         <div class="value" ${t.label === 'Leak' && latest.leak_detected ? 'style="color:#ef4444;"' : ''}>${t.value}<span class="unit">${t.unit}</span></div>
     </div>`).join('');
 
     document.getElementById('track-info').textContent = `${messages.length} messages tracked`;
 }
+
+// ── Bottom Sheet ──
+
+const sheet = document.getElementById('bottom-sheet');
+const handle = document.getElementById('sheet-handle');
+const locateBtn = document.getElementById('locate-btn');
+const STATES = ['collapsed', 'half', 'expanded'];
+let sheetState = 'half';
+
+function setSheetState(state) {
+    sheetState = state;
+    sheet.className = 'bottom-sheet ' + state;
+    const offsets = { collapsed: 62, half: 'calc(45vh + 10px)', expanded: 'calc(85vh + 10px)' };
+    locateBtn.style.bottom = offsets[state];
+}
+
+let touchStartY = 0;
+let touchCurrentY = 0;
+
+handle.addEventListener('touchstart', e => {
+    touchStartY = e.touches[0].clientY;
+    sheet.style.transition = 'none';
+}, { passive: true });
+
+handle.addEventListener('touchmove', e => {
+    touchCurrentY = e.touches[0].clientY;
+    const dy = touchCurrentY - touchStartY;
+    const baseTranslate = sheetState === 'collapsed' ? 'calc(100% - 52px)'
+        : sheetState === 'half' ? 'calc(100% - 45vh)'
+        : '0px';
+    sheet.style.transform = `translateY(calc(${baseTranslate} + ${dy}px))`;
+}, { passive: true });
+
+handle.addEventListener('touchend', () => {
+    sheet.style.transition = '';
+    const dy = touchCurrentY - touchStartY;
+    const idx = STATES.indexOf(sheetState);
+
+    if (dy < -50 && idx < 2) {
+        setSheetState(STATES[idx + 1]);
+    } else if (dy > 50 && idx > 0) {
+        setSheetState(STATES[idx - 1]);
+    } else {
+        setSheetState(sheetState);
+    }
+    touchStartY = 0;
+    touchCurrentY = 0;
+});
+
+handle.addEventListener('click', () => {
+    const idx = STATES.indexOf(sheetState);
+    if (idx === 0) setSheetState('half');
+    else if (idx === 1) setSheetState('expanded');
+    else setSheetState('half');
+});
+
+// ── Polling ──
 
 function updateTimestamp() {
     document.getElementById('last-update').textContent = 'Updated ' + moment().format('h:mm:ss A');
@@ -345,8 +620,10 @@ async function poll() {
     updateTimestamp();
 }
 
-// Init
+// ── Init ──
+
 initMap();
+initGeolocation();
 showSummary();
 setInterval(poll, POLL_INTERVAL_MS);
 </script>
