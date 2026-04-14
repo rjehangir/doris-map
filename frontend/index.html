@@ -113,16 +113,22 @@
             0% { transform: scale(0.8); opacity: 0.8; }
             100% { transform: scale(2.5); opacity: 0; }
         }
-        .user-dot-wrapper { position: relative; width: 16px; height: 16px; }
+        .user-marker-wrapper { position: relative; width: 24px; height: 24px; }
         .user-dot {
             width: 16px; height: 16px; background: #3b82f6; border-radius: 50%;
             border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-            position: absolute; top: 0; left: 0; z-index: 2;
+            position: absolute; top: 4px; left: 4px; z-index: 2;
         }
         .user-dot-pulse {
             width: 16px; height: 16px; background: rgba(59,130,246,0.35);
-            border-radius: 50%; position: absolute; top: 0; left: 0; z-index: 1;
+            border-radius: 50%; position: absolute; top: 4px; left: 4px; z-index: 1;
             animation: pulse-ring 2s ease-out infinite;
+        }
+        .user-arrow {
+            position: absolute; top: 0; left: 0; z-index: 2;
+            width: 24px; height: 24px;
+            filter: drop-shadow(0 1px 3px rgba(0,0,0,0.35));
+            transition: transform 0.3s ease;
         }
 
         /* Distance line tooltip */
@@ -173,6 +179,7 @@ let map, markersLayer, trackLayer, lineLayer;
 let currentImei = null;
 let devicesData = [];
 let userLatLng = null;
+let userHeading = null;
 let userMarker = null;
 
 // ── Map ──
@@ -200,25 +207,73 @@ function initGeolocation() {
     navigator.geolocation.watchPosition(
         pos => {
             userLatLng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+            if (pos.coords.heading != null && !isNaN(pos.coords.heading)) {
+                userHeading = pos.coords.heading;
+            }
             updateUserMarker();
         },
         () => {},
         { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
     );
+
+    if (window.DeviceOrientationEvent) {
+        window.addEventListener('deviceorientationabsolute', onDeviceOrientation, true);
+        window.addEventListener('deviceorientation', onDeviceOrientation);
+    }
+}
+
+function onDeviceOrientation(e) {
+    let heading = null;
+    if (e.absolute && e.alpha != null) {
+        heading = (360 - e.alpha) % 360;
+    } else if (e.webkitCompassHeading != null) {
+        heading = e.webkitCompassHeading;
+    }
+    if (heading != null && !isNaN(heading)) {
+        userHeading = heading;
+        updateUserMarkerRotation();
+    }
+}
+
+function makeUserIcon() {
+    if (userHeading != null) {
+        const arrowSvg = `<svg class="user-arrow" style="transform:rotate(${userHeading}deg)" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2 L5 20 L12 16 L19 20 Z" fill="#3b82f6" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
+        </svg>`;
+        return L.divIcon({
+            className: '',
+            html: `<div class="user-marker-wrapper"><div class="user-dot-pulse"></div>${arrowSvg}</div>`,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12],
+        });
+    }
+    return L.divIcon({
+        className: '',
+        html: '<div class="user-marker-wrapper"><div class="user-dot-pulse"></div><div class="user-dot"></div></div>',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+    });
 }
 
 function updateUserMarker() {
     if (!userLatLng) return;
     if (userMarker) {
         userMarker.setLatLng(userLatLng);
+        userMarker.setIcon(makeUserIcon());
     } else {
-        const icon = L.divIcon({
-            className: '',
-            html: '<div class="user-dot-wrapper"><div class="user-dot-pulse"></div><div class="user-dot"></div></div>',
-            iconSize: [16, 16],
-            iconAnchor: [8, 8],
-        });
-        userMarker = L.marker(userLatLng, { icon, zIndexOffset: 1000, interactive: false }).addTo(map);
+        userMarker = L.marker(userLatLng, { icon: makeUserIcon(), zIndexOffset: 1000, interactive: false }).addTo(map);
+    }
+}
+
+function updateUserMarkerRotation() {
+    if (!userMarker) return;
+    const el = userMarker.getElement();
+    if (!el) return;
+    const arrow = el.querySelector('.user-arrow');
+    if (arrow && userHeading != null) {
+        arrow.style.transform = `rotate(${userHeading}deg)`;
+    } else if (!arrow) {
+        userMarker.setIcon(makeUserIcon());
     }
 }
 
