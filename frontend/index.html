@@ -1,305 +1,354 @@
-<html>
-<meta http-equiv="refresh" content="600">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <title>SolarSurfer Tracker 2.0</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.8.0/leaflet.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.8.0/leaflet.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-0evHe/X+R7YkIZDRvuzKMRqM+OrBnVFBL6DOitfPri4tjfHxaWutUpFmBp4vmVor" crossorigin="anonymous">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0-beta1/dist/js/bootstrap.bundle.min.js" integrity="sha384-pprn3073KE6tl6bjs2QrFaJGz5/SUsLqktiwsUTF55Jfv3qYSDhgCecCxMW52nD2" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.3/moment.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DORIS Tracker</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
     <style>
-        #map {
-            width: 100%;
-            height: 100%;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+        #app { height: 100%; display: flex; flex-direction: column; }
+        #map { flex: 1; }
+
+        .top-bar {
+            background: #1a1a2e; color: #fff; padding: 10px 20px;
+            display: flex; align-items: center; justify-content: space-between;
+            z-index: 1000;
         }
-    </style>
-      <style type="text/css">
-        html,
-        body {
-            font-family: Roboto;
-            height: 100%;
-            margin: 0;
-            width: 100%
+        .top-bar h1 { font-size: 1.2rem; font-weight: 600; margin: 0; }
+        .top-bar .subtitle { font-size: 0.8rem; opacity: 0.7; }
+        .top-bar button { background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+        .top-bar button:hover { background: rgba(255,255,255,0.25); }
+
+        .side-panel {
+            position: absolute; top: 60px; right: 10px; z-index: 1000;
+            background: rgba(255,255,255,0.95); border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); width: 320px;
+            max-height: calc(100vh - 80px); overflow-y: auto;
+            backdrop-filter: blur(10px);
+        }
+        .side-panel h2 { font-size: 1rem; padding: 14px 16px 8px; margin: 0; color: #333; }
+
+        .device-card {
+            padding: 12px 16px; border-bottom: 1px solid #eee; cursor: pointer;
+            transition: background 0.15s;
+        }
+        .device-card:hover { background: #f0f4ff; }
+        .device-card:last-child { border-bottom: none; }
+        .device-name { font-weight: 600; font-size: 0.95rem; }
+        .device-meta { font-size: 0.78rem; color: #666; margin-top: 2px; }
+        .device-coords { font-size: 0.75rem; color: #888; font-family: monospace; }
+
+        .status-dot {
+            display: inline-block; width: 10px; height: 10px;
+            border-radius: 50%; margin-right: 6px; vertical-align: middle;
+        }
+        .status-green { background: #22c55e; }
+        .status-red { background: #ef4444; }
+        .status-amber { background: #f59e0b; }
+        .status-gray { background: #9ca3af; }
+
+        .detail-panel {
+            position: absolute; top: 60px; right: 10px; z-index: 1000;
+            background: rgba(255,255,255,0.95); border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); width: 340px;
+            max-height: calc(100vh - 80px); overflow-y: auto;
+            backdrop-filter: blur(10px);
+        }
+        .detail-panel h2 { font-size: 1.05rem; padding: 14px 16px 4px; margin: 0; }
+        .detail-panel .imei-label { font-size: 0.75rem; color: #888; padding: 0 16px 10px; font-family: monospace; }
+
+        .telemetry-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+            background: #eee; margin: 0 12px 12px; border-radius: 8px; overflow: hidden;
+        }
+        .telemetry-item {
+            background: #fff; padding: 10px 12px; text-align: center;
+        }
+        .telemetry-item .label { font-size: 0.65rem; text-transform: uppercase; color: #888; letter-spacing: 0.5px; }
+        .telemetry-item .value { font-size: 1.1rem; font-weight: 600; color: #333; margin-top: 2px; }
+        .telemetry-item .unit { font-size: 0.7rem; color: #999; }
+
+        .track-info {
+            padding: 8px 16px 14px; font-size: 0.78rem; color: #666;
         }
 
-        #wrapper {
-            min-height: 100%;
-        }
+        .hidden { display: none !important; }
 
-        #mapid {
-            height: 100%;
-            width: 100%;
-        }
-
-        #brand {
-            position: absolute;
-            z-index: 2000;
-            width: auto;
-            background-color: #FFFFFF;
-            color: black;
-            margin: 10px;
-            margin-top: 1vh;
-            border-radius: 10px;
-            padding: 10px;
-            width: 270px;
-        }
-
-        .brand-img {
-            display: block;
-            max-width: 250px;
-        }
-
-        .title {
-            font-size: 1.2em;
-            font-weight: bold;
-            display: block;
-        }
-
-        .detail-label {
-            font-weight: bold;
-            font-size: 0.8em;
-            display: inline-block;
-            width: 75px;
-        }
-
-        #status-box {
-            position: absolute;
-            z-index: 2000;
-            width: auto;
-            background-color: #2699D0;
-            color: white;
-            margin: 10px;
-            margin-top: 28vh;
-            border-radius: 10px;
-            padding: 10px;
-            width: 270px;
-        }
-
-        #radius {
-            width: 100%;
+        @media (max-width: 600px) {
+            .side-panel, .detail-panel { width: calc(100vw - 20px); right: 10px; left: 10px; }
         }
     </style>
 </head>
-
 <body>
-    <div id="brand">
-        <a href="https://bluerobotics.com"><img src="https://bluerobotics.com/wp-content/uploads/2020/01/BlueRobotics-Logo-Blue-Black.png" class="brand-img" /></a>
-        <hr />
-        <span class="title">SolarSurfer Tracker 2.0</span>
-        <span class="detail-label">Vehicle:</span> <em>Solar Turtle</em><br />
-        <span class="detail-label">Departed:</span> 1 July 2022<br />
-        <span class="detail-label">Origin:</span> Los Angeles, CA, USA<br />
-        <span class="detail-label">Destination:</span> Kona, Hawaii, USA<br />
-        <span class="detail-label">ETA:</span> 45-60 days
+<div id="app">
+    <div class="top-bar">
+        <div>
+            <h1>DORIS Tracker</h1>
+            <div class="subtitle" id="last-update">Loading...</div>
+        </div>
+        <div>
+            <button id="btn-back" class="hidden" onclick="showSummary()">&#8592; All Devices</button>
+        </div>
     </div>
-    <div id="status-box">
-        <span>Last update: </span><span id="last-update-time-span"></span></br>
-        <hr />
-        <strong>Last Segment:</strong><br />
-        <span>Speed: </span><span id="current-speed-span"></span><span> m/s</span><br />
-        <span>Solar power: </span><span id="current-solar-power-span"></span><span> W</span><br />
-        <span>Battery voltage: </span><span id="current-battery-voltage-span"></span><span> V</span><br />
-        <span>Power consumption: </span><span id="current-power-consumption-span"></span><span> W</span><br />
-        <span>Net energy: </span><span id="current-net-energy-span"></span><span> Wh</span>
-        <hr />
-        <strong>Trip:</strong><br />
-        <span>Total distance: </span><span id="total-distance-span"></span><span> km</span><br />
-        <span>Total energy: </span><span id="total-energy-span"></span><span> Wh</span>
-        <hr />
-        <strong>Color Scale:</strong><br />
-        <select id="color" onchange="replot(this)">
-            <option value="perc2color(point['solar_panel_power'].map(0,180,0,100),0,180)">Solar Power</option>
-            <option value="perc2color(point['battery_voltage'].map(160,210,0,100),-60,120)">Battery Voltage</option>
-        </select>
-    </br>
-    </div>
-
     <div id="map"></div>
 
-    <script>
-        var map
-        var layer
-        Number.prototype.map = function (in_min, in_max, out_min, out_max) {
-            return (this - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-        }
-        function perc2color(percentage, minHue = 0, maxHue = 180) {
-          const hue = percentage/100 * (maxHue - minHue) + minHue;
-          return `hsl(${hue}, 100%, 50%)`;
-        }
+    <div class="side-panel" id="summary-panel">
+        <h2>Devices</h2>
+        <div id="device-list">Loading...</div>
+    </div>
 
-    function sleep (time) {
-        return new Promise((resolve) => setTimeout(resolve, time));
+    <div class="detail-panel hidden" id="detail-panel">
+        <h2 id="detail-name"></h2>
+        <div class="imei-label" id="detail-imei"></div>
+        <div class="telemetry-grid" id="telemetry-grid"></div>
+        <div class="track-info" id="track-info"></div>
+    </div>
+</div>
+
+<script>
+const LOW_VOLTAGE_THRESHOLD = 12.0;
+const POLL_INTERVAL_MS = 30000;
+
+let map, markersLayer, trackLayer;
+let currentView = 'summary';
+let currentImei = null;
+let devicesData = [];
+
+function initMap() {
+    map = L.map('map', { zoomControl: false }).setView([21.3, -157.8], 10);
+    L.control.zoom({ position: 'topleft' }).addTo(map);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        maxZoom: 20,
+    }).addTo(map);
+
+    markersLayer = L.layerGroup().addTo(map);
+    trackLayer = L.layerGroup().addTo(map);
+}
+
+function getStatusClass(device) {
+    if (!device.latest_message) return 'status-gray';
+    if (device.latest_message.leak_detected) return 'status-red';
+    if (device.latest_message.battery_voltage < LOW_VOLTAGE_THRESHOLD) return 'status-amber';
+    return 'status-green';
+}
+
+function getStatusColor(device) {
+    const cls = getStatusClass(device);
+    if (cls === 'status-red') return '#ef4444';
+    if (cls === 'status-amber') return '#f59e0b';
+    if (cls === 'status-green') return '#22c55e';
+    return '#9ca3af';
+}
+
+function makeMarkerIcon(color, label) {
+    return L.divIcon({
+        className: '',
+        html: `<div style="
+            background:${color}; color:#fff; font-weight:600; font-size:11px;
+            padding:4px 8px; border-radius:12px; white-space:nowrap;
+            box-shadow:0 2px 6px rgba(0,0,0,0.3); border:2px solid #fff;
+            text-align:center; line-height:1.3;
+        ">${label}</div>`,
+        iconSize: null,
+        iconAnchor: [40, 14],
+    });
+}
+
+function makeTrackPointIcon(color) {
+    return L.divIcon({
+        className: '',
+        html: `<div style="
+            width:8px; height:8px; background:${color}; border-radius:50%;
+            border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,0.3);
+        "></div>`,
+        iconSize: [12, 12],
+        iconAnchor: [6, 6],
+    });
+}
+
+async function fetchDevices() {
+    try {
+        const resp = await fetch('/api/devices');
+        devicesData = await resp.json();
+        return devicesData;
+    } catch (e) {
+        console.error('Failed to fetch devices:', e);
+        return devicesData;
+    }
+}
+
+async function fetchTrack(imei) {
+    try {
+        const resp = await fetch(`/api/devices/${imei}/messages?limit=10000`);
+        return await resp.json();
+    } catch (e) {
+        console.error('Failed to fetch track:', e);
+        return [];
+    }
+}
+
+function renderSummary(devices) {
+    const list = document.getElementById('device-list');
+    if (!devices.length) {
+        list.innerHTML = '<div style="padding:16px;color:#888;">No devices configured.</div>';
+        return;
     }
 
-    function replot ()
-    {
-        fetch("/payloads?skip=0&limit=100000")
-            .then(res => res.json())
-            .then(data => {
-                const expression = document.getElementById('color').value
-                total = data.length
+    list.innerHTML = devices.map(d => {
+        const msg = d.latest_message;
+        const statusCls = getStatusClass(d);
+        const timeAgo = msg && msg.created_at ? moment(msg.created_at).fromNow() : 'No data';
+        const coords = msg ? `${msg.latitude.toFixed(6)}, ${msg.longitude.toFixed(6)}` : '--';
+        const voltage = msg ? `${msg.battery_voltage.toFixed(2)}V` : '--';
+        const depth = msg ? `${msg.max_depth.toFixed(1)}m` : '--';
+        const leak = msg && msg.leak_detected ? ' &middot; <span style="color:#ef4444;font-weight:600;">LEAK</span>' : '';
 
-                // Populate status box
-                sleep(100).then(() => {
-                    const lastMessage = data[data.length - 1]    // Do something after the sleep!
-                    const currentSolarPowerSpan = lastMessage['solar_panel_power']
-                    document.getElementById('current-solar-power-span').innerHTML = currentSolarPowerSpan
-                    const currentBatteryVoltage = parseFloat(lastMessage['battery_voltage']).toFixed(2)
-                    document.getElementById('current-battery-voltage-span').innerHTML = currentBatteryVoltage
-                    const currentPower = parseFloat(lastMessage['battery_power']).toFixed(1)
-                    document.getElementById('current-power-consumption-span').innerHTML = currentPower
-                    const currentSpeed = parseFloat(lastMessage['speed']).toFixed(1)
-                    document.getElementById('current-speed-span').innerHTML = currentSpeed
-                    const netEnergy = parseFloat(lastMessage['net_energy']).toFixed(0)
-                    const netEnergySign = netEnergy > 0 ? "+" : ""
-                    document.getElementById('current-net-energy-span').innerHTML = netEnergySign+netEnergy
-                    const totalDistance = parseFloat(lastMessage['total_distance']).toFixed(1)
-                    document.getElementById('total-distance-span').innerHTML = totalDistance
-                    const totalEnergy = parseFloat(lastMessage['total_energy_consumed']).toFixed(0)
-                    document.getElementById('total-energy-span').innerHTML = totalEnergy
-                    const lastUpdateDateTime = new Date(parseFloat(lastMessage['time_unix_usec'] / 1000))
-                    const timeSinceLastUpdate = moment(lastUpdateDateTime).fromNow();
-                    document.getElementById('last-update-time-span').innerHTML = timeSinceLastUpdate
-                });
+        return `<div class="device-card" onclick="showDetail('${d.imei}')">
+            <div class="device-name"><span class="status-dot ${statusCls}"></span>${d.name}</div>
+            <div class="device-meta">${timeAgo} &middot; ${voltage} &middot; Max depth: ${depth}${leak}</div>
+            <div class="device-coords">${coords}</div>
+        </div>`;
+    }).join('');
 
-                for (let n_point in data) {
-                    point = data[n_point]
-                    point["color"] = eval(expression)
-                    point["heading"] = (point["heading"] * 360 / 255),
-                    point["solar_panel_voltage"] = point["solar_panel_voltage"] * 64 / 255,
-                    point["battery_current"] = point["battery_current"] * 64 / 255
-                    point["battery_voltage"] = point["battery_voltage"] * 20 / 255
-                    point["battery_power"] = point["battery_voltage"]*point["battery_current"]
-                    point["left_motor_pwm"] = (point["left_motor_pwm"] - 127) * 100 / 127
-                    point["right_motor_pwm"] = (point["right_motor_pwm"] - 127) * 100 / 127
-                    point["distance_from_last"] = 0
-                    point["total_distance"] = 0
-                    point["time_since_last"] = 1800
-                    point["speed"] = 0
-                    point["total_energy_consumed"] = 0
-                    point["energy_generated"] = 0
-                    point["energy_consumed"] = 0
-                    point["net_energy"] = 0
-                    if ( n_point > 0 ) {
-                        last = data[n_point-1]
-                        const thisCoord = L.latLng(point["gps_lat"],point["gps_lon"])
-                        const lastCoord = L.latLng(last["gps_lat"],last["gps_lon"])
-                        point["distance_from_last"] = lastCoord.distanceTo(thisCoord)
-                        point["time_since_last"] = (point["time_boot_ms"] - last["time_boot_ms"])/1000
-                        point["speed"] = point["distance_from_last"]/point["time_since_last"]
-                        point["total_distance"] = last["total_distance"]+point["distance_from_last"]
-                        point["energy_generated"] = point["solar_panel_power"]*point["time_since_last"]/3600
-                        point["energy_consumed"] = point["battery_voltage"]*point["battery_current"]*point["time_since_last"]/3600
-                        point["net_energy"] = point["energy_generated"]-point["energy_consumed"]
-                        point["total_energy_consumed"] = last["total_energy_consumed"]+point["energy_consumed"]
-                    }
-                }
-                if (map == undefined) {
-                    const last = data[data.length - 1]
-                    map = L.map('map',{zoomControl:false}).setView([last["gps_lat"], last["gps_lon"]], 13);
-                    layer = L.layerGroup()
-                    layer.addTo(map);
-                    new L.Control.Zoom({ position: 'topright' }).addTo(map);
-                }
-                layer.clearLayers();
-                L.tileLayer('http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-                        maxZoom: 20,
-                        subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
-                    }).addTo(layer);
-                for (let n_point = 0; n_point < data.length - 2; n_point++) {
-                    point = data[n_point]
-                    next_point = data[n_point+1]
-                    L.polyline([point, next_point].map(point => [point["gps_lat"], point["gps_lon"]]), {color:point["color"]}).addTo(layer)
-                };
+    markersLayer.clearLayers();
+    trackLayer.clearLayers();
 
-                for (const point of data) {
-                    let marker = L.marker([point["gps_lat"], point["gps_lon"]], {
-                        title: JSON.stringify(point, null, 2),
-                        rotationAngle: point["heading"],
-                        icon: L.divIcon({
-                            html: `
-                                <svg style="width:24px;height:24px" viewBox="0 0 24 24">
-                                    <path fill="${point["color"]}" d="M15,20H9V12H4.16L12,4.16L19.84,12H15V20Z" />
-                                </svg>`,
-                            className: "",
-                            iconSize: [24, 24],
-                            iconAnchor: [12, 12],
-                        })
+    const bounds = [];
+    devices.forEach(d => {
+        if (!d.latest_message) return;
+        const lat = d.latest_message.latitude;
+        const lon = d.latest_message.longitude;
+        const color = getStatusColor(d);
+        const marker = L.marker([lat, lon], { icon: makeMarkerIcon(color, d.name) });
+        marker.bindPopup(`<b>${d.name}</b><br>IMEI: ${d.imei}<br>${d.latest_message.battery_voltage.toFixed(2)}V`);
+        marker.on('click', () => showDetail(d.imei));
+        markersLayer.addLayer(marker);
+        bounds.push([lat, lon]);
+    });
 
-                    })
+    if (bounds.length) {
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
+    }
+}
 
-                    map.on('mouseover', function (ev) {
-                        ev?.layer?.openPopup()
-                    })
+async function showSummary() {
+    currentView = 'summary';
+    currentImei = null;
+    document.getElementById('summary-panel').classList.remove('hidden');
+    document.getElementById('detail-panel').classList.add('hidden');
+    document.getElementById('btn-back').classList.add('hidden');
 
-                    marker.addTo(layer);
-                }
-            })
+    const devices = await fetchDevices();
+    renderSummary(devices);
+    updateTimestamp();
+}
+
+async function showDetail(imei) {
+    currentView = 'detail';
+    currentImei = imei;
+    document.getElementById('summary-panel').classList.add('hidden');
+    document.getElementById('detail-panel').classList.remove('hidden');
+    document.getElementById('btn-back').classList.remove('hidden');
+
+    const device = devicesData.find(d => d.imei === imei);
+    const name = device ? device.name : imei;
+
+    document.getElementById('detail-name').textContent = name;
+    document.getElementById('detail-imei').textContent = `IMEI: ${imei}`;
+
+    const messages = await fetchTrack(imei);
+    renderTrack(messages, device);
+    updateTimestamp();
+}
+
+function renderTrack(messages, device) {
+    markersLayer.clearLayers();
+    trackLayer.clearLayers();
+
+    if (!messages.length) {
+        document.getElementById('telemetry-grid').innerHTML = '<div class="telemetry-item" style="grid-column:1/-1;"><div class="value">No messages</div></div>';
+        document.getElementById('track-info').textContent = '';
+        return;
+    }
+
+    const coords = messages.map(m => [m.latitude, m.longitude]);
+
+    // Draw polyline segments colored by recency
+    for (let i = 0; i < coords.length - 1; i++) {
+        const pct = i / Math.max(coords.length - 1, 1);
+        const r = Math.round(100 + 55 * (1 - pct));
+        const g = Math.round(100 + 55 * pct);
+        const color = `rgb(${r}, ${g}, 180)`;
+        L.polyline([coords[i], coords[i + 1]], { color, weight: 3, opacity: 0.8 }).addTo(trackLayer);
+    }
+
+    // Point markers
+    messages.forEach((m, i) => {
+        const pct = i / Math.max(messages.length - 1, 1);
+        const isLatest = i === messages.length - 1;
+        const color = isLatest ? getStatusColor(device || {}) : `rgba(100, 100, 180, ${0.4 + 0.6 * pct})`;
+
+        if (isLatest) {
+            const label = device ? device.name : m.device_imei;
+            L.marker([m.latitude, m.longitude], { icon: makeMarkerIcon(color, label) }).addTo(markersLayer);
+        } else {
+            L.marker([m.latitude, m.longitude], { icon: makeTrackPointIcon(color) })
+                .bindPopup(`<b>#${i + 1}</b><br>${m.latitude.toFixed(6)}, ${m.longitude.toFixed(6)}<br>${m.battery_voltage.toFixed(2)}V &middot; ${m.max_depth.toFixed(1)}m<br>${m.transmit_time}`)
+                .addTo(markersLayer);
         }
+    });
 
-        //From: https://github.com/bbecquet/Leaflet.RotatedMarker/blob/master/leaflet.rotatedMarker.js
-        (function () {
-            // save these original methods before they are overwritten
-            var proto_initIcon = L.Marker.prototype._initIcon;
-            var proto_setPos = L.Marker.prototype._setPos;
+    map.fitBounds(coords, { padding: [60, 60], maxZoom: 16 });
 
-            var oldIE = (L.DomUtil.TRANSFORM === 'msTransform');
+    // Telemetry panel
+    const latest = messages[messages.length - 1];
+    const grid = document.getElementById('telemetry-grid');
+    grid.innerHTML = [
+        { label: 'Latitude', value: latest.latitude.toFixed(6), unit: '°' },
+        { label: 'Longitude', value: latest.longitude.toFixed(6), unit: '°' },
+        { label: 'Altitude', value: latest.altitude.toFixed(1), unit: 'm' },
+        { label: 'Satellites', value: latest.satellite_count, unit: '' },
+        { label: 'Battery', value: latest.battery_voltage.toFixed(2), unit: 'V' },
+        { label: 'Max Depth', value: latest.max_depth.toFixed(1), unit: 'm' },
+        { label: 'Leak', value: latest.leak_detected ? 'YES' : 'No', unit: '' },
+        { label: 'Last Update', value: latest.created_at ? moment(latest.created_at).fromNow() : '--', unit: '' },
+    ].map(t => `<div class="telemetry-item">
+        <div class="label">${t.label}</div>
+        <div class="value" ${t.label === 'Leak' && latest.leak_detected ? 'style="color:#ef4444;"' : ''}>${t.value}<span class="unit">${t.unit}</span></div>
+    </div>`).join('');
 
-            L.Marker.addInitHook(function () {
-                var iconOptions = this.options.icon && this.options.icon.options;
-                var iconAnchor = iconOptions && this.options.icon.options.iconAnchor;
-                if (iconAnchor) {
-                    iconAnchor = (iconAnchor[0] + 'px ' + iconAnchor[1] + 'px');
-                }
-                this.options.rotationOrigin = this.options.rotationOrigin || iconAnchor || 'center bottom';
-                this.options.rotationAngle = this.options.rotationAngle || 0;
+    document.getElementById('track-info').textContent = `${messages.length} messages tracked`;
+}
 
-                // Ensure marker keeps rotated during dragging
-                this.on('drag', function (e) { e.target._applyRotation(); });
-            });
+function updateTimestamp() {
+    document.getElementById('last-update').textContent = 'Updated ' + moment().format('h:mm:ss A');
+}
 
-            L.Marker.include({
-                _initIcon: function () {
-                    proto_initIcon.call(this);
-                },
+async function poll() {
+    if (currentView === 'summary') {
+        const devices = await fetchDevices();
+        renderSummary(devices);
+    } else if (currentView === 'detail' && currentImei) {
+        const device = devicesData.find(d => d.imei === currentImei);
+        const messages = await fetchTrack(currentImei);
+        renderTrack(messages, device);
+    }
+    updateTimestamp();
+}
 
-                _setPos: function (pos) {
-                    proto_setPos.call(this, pos);
-                    this._applyRotation();
-                },
-
-                _applyRotation: function () {
-                    if (this.options.rotationAngle) {
-                        this._icon.style[L.DomUtil.TRANSFORM + 'Origin'] = this.options.rotationOrigin;
-
-                        if (oldIE) {
-                            // for IE 9, use the 2D rotation
-                            this._icon.style[L.DomUtil.TRANSFORM] = 'rotate(' + this.options.rotationAngle + 'deg)';
-                        } else {
-                            // for modern browsers, prefer the 3D accelerated version
-                            this._icon.style[L.DomUtil.TRANSFORM] += ' rotateZ(' + this.options.rotationAngle + 'deg)';
-                        }
-                    }
-                },
-
-                setRotationAngle: function (angle) {
-                    this.options.rotationAngle = angle;
-                    this.update();
-                    return this;
-                },
-
-                setRotationOrigin: function (origin) {
-                    this.options.rotationOrigin = origin;
-                    this.update();
-                    return this;
-                }
-            });
-        })();
-
-        replot()
-        setInterval(replot, 30000);
-    </script>
+// Init
+initMap();
+showSummary();
+setInterval(poll, POLL_INTERVAL_MS);
+</script>
 </body>
-
 </html>
-

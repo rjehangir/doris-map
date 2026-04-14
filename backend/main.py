@@ -1,19 +1,27 @@
 #! /usr/bin/env python3
 
-import uvicorn
 import json
-from pprint import pprint
 from typing import Any, List
-from fastapi import Depends, FastAPI, Request
-from fastapi.staticfiles import StaticFiles
-from starlette.responses import Response as StarletteResponse
-from schemas import RockblockMessageBase, default_rockblock_message, RockblockMessageRegistered, PayloadIdentified
-from crud import create_rockblock_message, get_last_rockblock_message, get_rockblock_messages, get_payloads
-import models
-from sqlalchemy.orm import Session
-from database import SessionLocal, engine
 
-models.Base.metadata.create_all(bind=engine)
+import uvicorn
+from fastapi import Depends, FastAPI, Form, Request
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from loguru import logger
+from sqlalchemy.orm import Session
+from starlette.responses import Response as StarletteResponse
+
+import models
+from config import get_device_name, get_devices, load_devices
+from crud import (
+    create_doris_message,
+    get_device_messages,
+    get_latest_message_per_device,
+    get_recent_messages,
+)
+from database import SessionLocal, engine
+from schemas import DeviceStatus, DorisMessageResponse
+
 
 class PrettyJSONResponse(StarletteResponse):
     media_type = "application/json"
@@ -25,7 +33,21 @@ class PrettyJSONResponse(StarletteResponse):
             allow_nan=False,
             indent=2,
             separators=(", ", ": "),
+            default=str,
         ).encode(self.charset)
+
+
+models.Base.metadata.create_all(bind=engine)
+load_devices()
+
+app = FastAPI(
+    title="DORIS Tracker API",
+    description="Multi-device camera tracking system via Iridium / RockBLOCK.",
+    default_response_class=PrettyJSONResponse,
+)
+
+app.mount("/ui", StaticFiles(directory="../frontend", html=True), name="static")
+
 
 def get_db():
     db = SessionLocal()
@@ -34,38 +56,77 @@ def get_db():
     finally:
         db.close()
 
-last_rockblock_message = default_rockblock_message
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/ui")
 
 
-app = FastAPI(
-    title="Solar Surfer 2 API",
-    description="This thing is going to Hawaii, one way or another.",
-    default_response_class=PrettyJSONResponse,
-)
+@app.post("/rockblock-webhook")
+async def rockblock_webhook(
+    imei: str = Form(...),
+    serial: str = Form(...),
+    momsn: int = Form(...),
+    transmit_time: str = Form(...),
+    iridium_latitude: float = Form(...),
+    iridium_longitude: float = Form(...),
+    iridium_cep: int = Form(...),
+    data: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Receive a RockBLOCK webhook (form-encoded) from Rock Seven."""
+    device_name = get_device_name(imei)
+    if device_name == imei:
+        logger.warning(f"Received message from unknown IMEI: {imei}")
+    else:
+        logger.info(f"Received message from {device_name} (IMEI {imei})")
 
-app.mount("/ui", StaticFiles(directory="../frontend", html = True), name="static")
+    try:
+        message = create_doris_message(
+            db=db,
+            imei=imei,
+            momsn=momsn,
+            transmit_time=transmit_time,
+            iridium_latitude=iridium_latitude,
+            iridium_longitude=iridium_longitude,
+            iridium_cep=iridium_cep,
+            hex_data=data,
+        )
+        return {"status": "ok", "id": message.id}
+    except Exception as e:
+        logger.error(f"Failed to process message from IMEI {imei}: {e}")
+        return {"status": "error", "detail": str(e)}
 
-@app.post("/rockblock-messages")
-async def rockblock_web_hook_post_route(request: Request, db: Session = Depends(get_db)):
-    raw_message = await request.body()
-    print('raw', raw_message)
-    message = RockblockMessageBase(**json.loads(raw_message))
-    print('message', message)
-    create_rockblock_message(db, message)
-    pprint(message.dict())
-    return message
 
-@app.get("/rockblock-message", response_model=RockblockMessageRegistered)
-async def last_rockblock_message_route(db: Session = Depends(get_db)) -> Any:
-    return get_last_rockblock_message(db)
+@app.get("/api/devices", response_model=List[DeviceStatus])
+async def list_devices(db: Session = Depends(get_db)) -> Any:
+    """List all configured devices with their latest reported position."""
+    devices = get_devices()
+    result = []
+    for imei, info in devices.items():
+        latest = get_latest_message_per_device(db, imei)
+        result.append(
+            DeviceStatus(
+                imei=imei,
+                name=info.get("name", imei),
+                latest_message=latest,
+            )
+        )
+    return result
 
-@app.get("/rockblock-messages", response_model=List[RockblockMessageRegistered])
-async def rockblock_messages_route(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> Any:
-    return get_rockblock_messages(db, skip, limit)
 
-@app.get("/payloads", response_model=List[PayloadIdentified])
-async def payloads_route(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> Any:
-    return get_payloads(db, skip, limit)
+@app.get("/api/devices/{imei}/messages", response_model=List[DorisMessageResponse])
+async def device_messages(
+    imei: str, skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)
+) -> Any:
+    """Get message history for a single device."""
+    return get_device_messages(db, imei, skip, limit)
+
+
+@app.get("/api/messages/recent", response_model=List[DorisMessageResponse])
+async def recent_messages(hours: int = 24, db: Session = Depends(get_db)) -> Any:
+    """Get all messages from all devices within a time window."""
+    return get_recent_messages(db, hours)
 
 
 if __name__ == "__main__":
