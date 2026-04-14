@@ -6,19 +6,19 @@ from pydantic import BaseModel
 
 class DorisMessageBase(BaseModel):
     device_imei: str
-    momsn: int
-    transmit_time: str
-    iridium_latitude: float
-    iridium_longitude: float
-    iridium_cep: int
+    momsn: Optional[int] = None
+    transmit_time: Optional[str] = None
+    iridium_latitude: Optional[float] = None
+    iridium_longitude: Optional[float] = None
+    iridium_cep: Optional[int] = None
     latitude: float
     longitude: float
-    altitude: float
-    satellite_count: int
-    battery_voltage: float
-    leak_detected: bool
-    max_depth: float
-    raw_data: str
+    altitude: Optional[float] = None
+    satellite_count: Optional[int] = None
+    battery_voltage: Optional[float] = None
+    leak_detected: Optional[bool] = None
+    max_depth: Optional[float] = None
+    raw_data: Optional[str] = None
 
 
 class DorisMessageResponse(DorisMessageBase):
