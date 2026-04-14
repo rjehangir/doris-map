@@ -119,6 +119,30 @@ async def rockblock_webhook(
         return {"status": "error", "detail": str(e)}
 
 
+@app.get("/api/devices-debug")
+async def devices_debug(db: Session = Depends(get_db)):
+    """Raw debug endpoint – no response_model, returns dicts."""
+    try:
+        devices = get_devices()
+        result = []
+        for imei, info in devices.items():
+            latest = get_latest_message_per_device(db, imei)
+            entry = {"imei": imei, "name": info.get("name", imei), "latest_message": None}
+            if latest:
+                entry["latest_message"] = {
+                    "id": latest.id,
+                    "device_imei": latest.device_imei,
+                    "latitude": latest.latitude,
+                    "longitude": latest.longitude,
+                    "battery_voltage": latest.battery_voltage,
+                    "created_at": str(latest.created_at),
+                }
+            result.append(entry)
+        return result
+    except Exception as e:
+        return {"error": str(e), "type": type(e).__name__}
+
+
 @app.get("/api/devices", response_model=List[DeviceStatus])
 async def list_devices(db: Session = Depends(get_db)) -> Any:
     """List all configured devices with their latest reported position."""
