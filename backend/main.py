@@ -49,6 +49,20 @@ app = FastAPI(
 app.mount("/ui", StaticFiles(directory="../frontend", html=True), name="static")
 
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    logger.exception(f"Unhandled error on {request.url.path}")
+    return PrettyJSONResponse(
+        status_code=500,
+        content={
+            "error": str(exc),
+            "type": type(exc).__name__,
+            "traceback": traceback.format_exc(),
+        },
+    )
+
+
 def get_db():
     db = SessionLocal()
     try:
@@ -108,16 +122,20 @@ async def rockblock_webhook(
 @app.get("/api/devices")
 async def list_devices(db: Session = Depends(get_db)):
     """List all configured devices with their latest reported position."""
-    devices = get_devices()
-    result = []
-    for imei, info in devices.items():
-        latest = get_latest_message_per_device(db, imei)
-        result.append({
-            "imei": imei,
-            "name": info.get("name", imei),
-            "latest_message": serialize_message(latest),
-        })
-    return result
+    try:
+        devices = get_devices()
+        result = []
+        for imei, info in devices.items():
+            latest = get_latest_message_per_device(db, imei)
+            result.append({
+                "imei": imei,
+                "name": info.get("name", imei),
+                "latest_message": serialize_message(latest),
+            })
+        return result
+    except Exception as e:
+        logger.exception("Error in /api/devices")
+        return {"error": str(e), "type": type(e).__name__, "detail": repr(e)}
 
 
 @app.get("/api/devices/{imei}/messages")
