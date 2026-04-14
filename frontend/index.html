@@ -29,87 +29,81 @@
         }
         .top-bar button:hover { background: rgba(255,255,255,0.25); }
 
-        /* Bottom sheet */
-        .bottom-sheet {
+        /* Detail bar */
+        .detail-bar {
             position: fixed; bottom: 0; left: 0; right: 0;
             z-index: 1000;
             background: rgba(255,255,255,0.97);
-            border-radius: 16px 16px 0 0;
-            box-shadow: 0 -2px 16px rgba(0,0,0,0.12);
+            border-radius: 14px 14px 0 0;
+            box-shadow: 0 -2px 12px rgba(0,0,0,0.10);
             backdrop-filter: blur(12px);
-            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            transition: transform 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94);
             will-change: transform;
-            max-height: 85vh;
+            transform: translateY(100%);
+            max-height: 70vh;
         }
-        .bottom-sheet.collapsed { transform: translateY(calc(100% - 52px)); }
-        .bottom-sheet.half { transform: translateY(calc(100% - 45vh)); }
-        .bottom-sheet.expanded { transform: translateY(0); }
+        .detail-bar.peek { transform: translateY(0); }
+        .detail-bar.expanded { transform: translateY(0); }
 
-        .sheet-handle {
+        .detail-bar .bar-handle {
             display: flex; align-items: center; justify-content: center;
-            padding: 10px 0 6px; cursor: grab; touch-action: none;
+            padding: 8px 0 4px; cursor: grab; touch-action: none;
         }
-        .sheet-handle-bar {
-            width: 36px; height: 4px; border-radius: 2px;
-            background: #ccc;
+        .detail-bar .bar-handle-pip {
+            width: 32px; height: 4px; border-radius: 2px; background: #ccc;
         }
-        .sheet-summary {
-            text-align: center; font-size: 0.8rem; color: #888;
-            padding: 0 16px 8px; font-weight: 500;
-        }
-        .sheet-content {
-            overflow-y: auto; padding-bottom: env(safe-area-inset-bottom, 16px);
-        }
-        .bottom-sheet.collapsed .sheet-content { display: none; }
-        .bottom-sheet.half .sheet-content { max-height: calc(45vh - 70px); }
-        .bottom-sheet.expanded .sheet-content { max-height: calc(85vh - 52px); }
 
-        /* Device cards */
-        .device-card {
-            padding: 14px 16px; border-bottom: 1px solid #f0f0f0;
-            cursor: pointer; transition: background 0.15s;
-            min-height: 56px; display: flex; flex-direction: column; justify-content: center;
+        .peek-row {
+            display: flex; align-items: center; gap: 10px;
+            padding: 6px 14px 10px; min-height: 44px;
         }
-        .device-card:active { background: #e8eeff; }
-        .device-card:last-child { border-bottom: none; }
-        .device-name { font-weight: 600; font-size: 0.95rem; }
-        .device-meta { font-size: 0.78rem; color: #666; margin-top: 3px; }
-        .device-distance { font-size: 0.75rem; color: #3b82f6; margin-top: 2px; }
-        .device-coords { font-size: 0.72rem; color: #999; font-family: monospace; margin-top: 1px; }
+        .peek-name { font-weight: 600; font-size: 0.92rem; white-space: nowrap; }
+        .peek-stats {
+            display: flex; gap: 10px; font-size: 0.76rem; color: #555;
+            overflow-x: auto; white-space: nowrap; flex: 1;
+        }
+        .peek-stats span { display: inline-flex; align-items: center; gap: 3px; }
+        .peek-close {
+            background: none; border: none; font-size: 1.2rem; color: #999;
+            cursor: pointer; padding: 4px 6px; min-width: 32px; min-height: 32px;
+            display: flex; align-items: center; justify-content: center;
+        }
 
         .status-dot {
-            display: inline-block; width: 10px; height: 10px;
-            border-radius: 50%; margin-right: 6px; vertical-align: middle;
+            display: inline-block; width: 9px; height: 9px;
+            border-radius: 50%; margin-right: 4px; vertical-align: middle; flex-shrink: 0;
         }
         .status-green { background: #22c55e; }
         .status-red { background: #ef4444; }
         .status-amber { background: #f59e0b; }
         .status-gray { background: #9ca3af; }
 
-        /* Detail view */
-        .detail-header { padding: 4px 16px 8px; }
-        .detail-header h2 { font-size: 1.05rem; margin: 0; }
-        .detail-header .imei-label { font-size: 0.72rem; color: #888; font-family: monospace; margin-top: 2px; }
+        .expanded-content {
+            display: none; overflow-y: auto;
+            padding-bottom: env(safe-area-inset-bottom, 12px);
+            max-height: calc(70vh - 70px);
+        }
+        .detail-bar.expanded .expanded-content { display: block; }
 
         .telemetry-grid {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
-            background: #eee; margin: 0 12px 12px; border-radius: 8px; overflow: hidden;
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px;
+            background: #eee; margin: 0 10px 10px; border-radius: 8px; overflow: hidden;
         }
-        .telemetry-item { background: #fff; padding: 10px 8px; text-align: center; }
-        .telemetry-item .label { font-size: 0.7rem; text-transform: uppercase; color: #888; letter-spacing: 0.5px; }
-        .telemetry-item .value { font-size: 1.2rem; font-weight: 600; color: #333; margin-top: 2px; }
-        .telemetry-item .unit { font-size: 0.7rem; color: #999; }
-        .track-info { padding: 4px 16px 14px; font-size: 0.78rem; color: #666; }
+        .telemetry-item { background: #fff; padding: 8px 6px; text-align: center; }
+        .telemetry-item .label { font-size: 0.65rem; text-transform: uppercase; color: #888; letter-spacing: 0.4px; }
+        .telemetry-item .value { font-size: 1rem; font-weight: 600; color: #333; margin-top: 1px; }
+        .telemetry-item .unit { font-size: 0.65rem; color: #999; }
+        .track-info { padding: 2px 14px 10px; font-size: 0.75rem; color: #666; }
 
         /* Locate me button */
         .locate-btn {
             position: fixed; z-index: 1001;
-            right: 12px; bottom: 62px;
+            right: 12px; bottom: 16px;
             width: 44px; height: 44px; border-radius: 50%;
             background: #fff; border: none;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             cursor: pointer; display: flex; align-items: center; justify-content: center;
-            transition: bottom 0.3s cubic-bezier(0.25,0.46,0.45,0.94);
+            transition: bottom 0.28s cubic-bezier(0.25,0.46,0.45,0.94);
         }
         .locate-btn svg { width: 22px; height: 22px; fill: #3b82f6; }
         .locate-btn:active { background: #f0f4ff; }
@@ -151,9 +145,7 @@
             <h1>DORIS Tracker</h1>
             <div class="subtitle" id="last-update">Loading...</div>
         </div>
-        <div>
-            <button id="btn-back" class="hidden" onclick="showSummary()">&#8592; Back</button>
-        </div>
+        <div></div>
     </div>
     <div id="map"></div>
 </div>
@@ -162,23 +154,14 @@
     <svg viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
 </button>
 
-<div class="bottom-sheet half" id="bottom-sheet">
-    <div class="sheet-handle" id="sheet-handle">
-        <div class="sheet-handle-bar"></div>
+<div class="detail-bar" id="detail-bar">
+    <div class="bar-handle" id="bar-handle">
+        <div class="bar-handle-pip"></div>
     </div>
-    <div class="sheet-summary" id="sheet-summary">Loading...</div>
-    <div class="sheet-content" id="sheet-content">
-        <div id="summary-content">
-            <div id="device-list"></div>
-        </div>
-        <div id="detail-content" class="hidden">
-            <div class="detail-header">
-                <h2 id="detail-name"></h2>
-                <div class="imei-label" id="detail-imei"></div>
-            </div>
-            <div class="telemetry-grid" id="telemetry-grid"></div>
-            <div class="track-info" id="track-info"></div>
-        </div>
+    <div class="peek-row" id="peek-row"></div>
+    <div class="expanded-content" id="expanded-content">
+        <div class="telemetry-grid" id="telemetry-grid"></div>
+        <div class="track-info" id="track-info"></div>
     </div>
 </div>
 
@@ -187,13 +170,10 @@ const LOW_VOLTAGE_THRESHOLD = 12.0;
 const POLL_INTERVAL_MS = 30000;
 
 let map, markersLayer, trackLayer, lineLayer;
-let currentView = 'summary';
 let currentImei = null;
 let devicesData = [];
 let userLatLng = null;
 let userMarker = null;
-let activeLine = null;
-let activeTooltip = null;
 
 // ── Map ──
 
@@ -210,10 +190,7 @@ function initMap() {
     trackLayer = L.layerGroup().addTo(map);
     lineLayer = L.layerGroup().addTo(map);
 
-    map.on('click', () => {
-        clearDistanceLine();
-        setSheetState('collapsed');
-    });
+    map.on('click', () => dismissDetail());
 }
 
 // ── Geolocation ──
@@ -287,11 +264,11 @@ function drawDistanceLine(deviceLatLng) {
     const midLat = (userLatLng.lat + deviceLatLng.lat) / 2;
     const midLng = (userLatLng.lng + deviceLatLng.lng) / 2;
 
-    activeLine = L.polyline([userLatLng, deviceLatLng], {
+    L.polyline([userLatLng, deviceLatLng], {
         color: '#3b82f6', weight: 2, dashArray: '8, 6', opacity: 0.8,
     }).addTo(lineLayer);
 
-    activeTooltip = L.tooltip({
+    L.tooltip({
         permanent: true, direction: 'center', className: 'distance-tooltip', offset: [0, 0],
     })
     .setContent(`${formatDistance(dist)} &middot; ${bearing.degrees}° ${bearing.label}`)
@@ -301,14 +278,11 @@ function drawDistanceLine(deviceLatLng) {
 
 function clearDistanceLine() {
     lineLayer && lineLayer.clearLayers();
-    activeLine = null;
-    activeTooltip = null;
 }
 
 function distanceFromUser(lat, lon) {
     if (!userLatLng) return '';
-    const d = userLatLng.distanceTo(L.latLng(lat, lon));
-    return formatDistance(d);
+    return formatDistance(userLatLng.distanceTo(L.latLng(lat, lon)));
 }
 
 // ── Markers ──
@@ -378,40 +352,16 @@ async function fetchTrack(imei) {
     }
 }
 
-// ── Summary View ──
+// ── Overview (map only, no list) ──
 
-function renderSummary(devices) {
-    const list = document.getElementById('device-list');
-    const onlineCount = devices.filter(d => d.latest_message).length;
-    document.getElementById('sheet-summary').textContent = `${onlineCount} device${onlineCount !== 1 ? 's' : ''} reporting`;
-
-    if (!devices.length) {
-        list.innerHTML = '<div style="padding:16px;color:#888;">No devices configured.</div>';
-        return;
-    }
-
-    list.innerHTML = devices.map(d => {
-        const msg = d.latest_message;
-        const statusCls = getStatusClass(d);
-        const timeAgo = msg && msg.created_at ? moment(msg.created_at).fromNow() : 'No data';
-        const voltage = msg ? `${msg.battery_voltage.toFixed(2)}V` : '--';
-        const depth = msg ? `${msg.max_depth.toFixed(1)}m` : '--';
-        const leak = msg && msg.leak_detected ? ' &middot; <span style="color:#ef4444;font-weight:600;">LEAK</span>' : '';
-        const dist = msg ? distanceFromUser(msg.latitude, msg.longitude) : '';
-        const distHtml = dist ? `<div class="device-distance">${dist} away</div>` : '';
-        const coords = msg ? `${msg.latitude.toFixed(6)}, ${msg.longitude.toFixed(6)}` : '--';
-
-        return `<div class="device-card" onclick="onDeviceCardClick('${d.imei}')">
-            <div class="device-name"><span class="status-dot ${statusCls}"></span>${d.name}</div>
-            <div class="device-meta">${timeAgo} &middot; ${voltage} &middot; Depth: ${depth}${leak}</div>
-            ${distHtml}
-            <div class="device-coords">${coords}</div>
-        </div>`;
-    }).join('');
-
+function renderOverview(devices) {
     markersLayer.clearLayers();
     trackLayer.clearLayers();
     clearDistanceLine();
+
+    const onlineCount = devices.filter(d => d.latest_message).length;
+    document.getElementById('last-update').textContent =
+        `${onlineCount} unit${onlineCount !== 1 ? 's' : ''} · Updated ${moment().format('h:mm A')}`;
 
     const bounds = [];
     devices.forEach(d => {
@@ -420,7 +370,10 @@ function renderSummary(devices) {
         const lon = d.latest_message.longitude;
         const color = getStatusColor(d);
         const marker = L.marker([lat, lon], { icon: makeMarkerIcon(color, d.name) });
-        marker.on('click', () => onMarkerClick(d));
+        marker.on('click', e => {
+            L.DomEvent.stopPropagation(e);
+            onMarkerClick(d);
+        });
         markersLayer.addLayer(marker);
         bounds.push([lat, lon]);
     });
@@ -429,52 +382,61 @@ function renderSummary(devices) {
     if (bounds.length) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
 }
 
+// ── Marker Click → show detail bar ──
+
 function onMarkerClick(device) {
     if (!device.latest_message) return;
-    const deviceLL = L.latLng(device.latest_message.latitude, device.latest_message.longitude);
-    drawDistanceLine(deviceLL);
-    setSheetState('half');
+    const ll = L.latLng(device.latest_message.latitude, device.latest_message.longitude);
+    drawDistanceLine(ll);
     showDetail(device.imei);
 }
 
-function onDeviceCardClick(imei) {
-    const device = devicesData.find(d => d.imei === imei);
-    if (device && device.latest_message) {
-        const deviceLL = L.latLng(device.latest_message.latitude, device.latest_message.longitude);
-        drawDistanceLine(deviceLL);
-    }
-    showDetail(imei);
+// ── Detail Bar ──
+
+const bar = document.getElementById('detail-bar');
+const barHandle = document.getElementById('bar-handle');
+const locateBtn = document.getElementById('locate-btn');
+let barState = 'hidden';
+
+function setBarState(state) {
+    barState = state;
+    bar.className = 'detail-bar' + (state !== 'hidden' ? ' ' + state : '');
+    const peekH = bar.querySelector('.peek-row').offsetHeight + 20;
+    locateBtn.style.bottom = state === 'hidden' ? '16px'
+        : state === 'peek' ? (peekH + 24) + 'px'
+        : 'calc(70vh + 10px)';
 }
 
-// ── Detail View ──
-
-async function showSummary() {
-    currentView = 'summary';
+function dismissDetail() {
     currentImei = null;
     clearDistanceLine();
-    document.getElementById('summary-content').classList.remove('hidden');
-    document.getElementById('detail-content').classList.add('hidden');
-    document.getElementById('btn-back').classList.add('hidden');
-    setSheetState('half');
-
-    const devices = await fetchDevices();
-    renderSummary(devices);
-    updateTimestamp();
+    setBarState('hidden');
+    trackLayer.clearLayers();
+    markersLayer.clearLayers();
+    renderOverview(devicesData);
 }
 
 async function showDetail(imei) {
-    currentView = 'detail';
     currentImei = imei;
-    document.getElementById('summary-content').classList.add('hidden');
-    document.getElementById('detail-content').classList.remove('hidden');
-    document.getElementById('btn-back').classList.remove('hidden');
-    setSheetState('half');
-
     const device = devicesData.find(d => d.imei === imei);
     const name = device ? device.name : imei;
+    const msg = device ? device.latest_message : null;
 
-    document.getElementById('detail-name').textContent = name;
-    document.getElementById('detail-imei').textContent = `IMEI: ${imei}`;
+    const statusCls = getStatusClass(device || {});
+    const timeAgo = msg && msg.created_at ? moment(msg.created_at).fromNow() : '--';
+    const voltage = msg ? msg.battery_voltage.toFixed(1) + 'V' : '--';
+    const dist = msg ? distanceFromUser(msg.latitude, msg.longitude) : '';
+    const distSpan = dist ? `<span>${dist}</span>` : '';
+    const leak = msg && msg.leak_detected ? '<span style="color:#ef4444;font-weight:600;">LEAK</span>' : '';
+
+    document.getElementById('peek-row').innerHTML = `
+        <span class="status-dot ${statusCls}"></span>
+        <span class="peek-name">${name}</span>
+        <span class="peek-stats">${distSpan}<span>${voltage}</span><span>${timeAgo}</span>${leak}</span>
+        <button class="peek-close" onclick="dismissDetail()" aria-label="Close">&times;</button>
+    `;
+
+    setBarState('peek');
 
     const messages = await fetchTrack(imei);
     renderTrack(messages, device);
@@ -486,10 +448,10 @@ function renderTrack(messages, device) {
     trackLayer.clearLayers();
 
     const name = device ? device.name : '?';
-    document.getElementById('sheet-summary').textContent = name;
 
     if (!messages.length) {
-        document.getElementById('telemetry-grid').innerHTML = '<div class="telemetry-item" style="grid-column:1/-1;"><div class="value">No messages</div></div>';
+        document.getElementById('telemetry-grid').innerHTML =
+            '<div class="telemetry-item" style="grid-column:1/-1;"><div class="value">No messages</div></div>';
         document.getElementById('track-info').textContent = '';
         return;
     }
@@ -500,8 +462,9 @@ function renderTrack(messages, device) {
         const pct = i / Math.max(coords.length - 1, 1);
         const r = Math.round(100 + 55 * (1 - pct));
         const g = Math.round(100 + 55 * pct);
-        const color = `rgb(${r}, ${g}, 180)`;
-        L.polyline([coords[i], coords[i + 1]], { color, weight: 3, opacity: 0.8 }).addTo(trackLayer);
+        L.polyline([coords[i], coords[i + 1]], {
+            color: `rgb(${r}, ${g}, 180)`, weight: 3, opacity: 0.8
+        }).addTo(trackLayer);
     }
 
     messages.forEach((m, i) => {
@@ -513,7 +476,7 @@ function renderTrack(messages, device) {
             L.marker([m.latitude, m.longitude], { icon: makeMarkerIcon(color, name) }).addTo(markersLayer);
         } else {
             L.marker([m.latitude, m.longitude], { icon: makeTrackPointIcon(color) })
-                .bindPopup(`<b>#${i + 1}</b><br>${m.latitude.toFixed(6)}, ${m.longitude.toFixed(6)}<br>${m.battery_voltage.toFixed(2)}V &middot; ${m.max_depth.toFixed(1)}m<br>${m.transmit_time}`)
+                .bindPopup(`<b>#${i + 1}</b><br>${m.latitude.toFixed(6)}, ${m.longitude.toFixed(6)}<br>${m.battery_voltage.toFixed(2)}V · ${m.max_depth.toFixed(1)}m<br>${m.transmit_time}`)
                 .addTo(markersLayer);
         }
     });
@@ -524,95 +487,83 @@ function renderTrack(messages, device) {
 
     const latest = messages[messages.length - 1];
     const dist = distanceFromUser(latest.latitude, latest.longitude);
-    const distItem = dist ? { label: 'Distance', value: dist, unit: '' } : null;
 
     const items = [
-        { label: 'Latitude', value: latest.latitude.toFixed(6), unit: '°' },
-        { label: 'Longitude', value: latest.longitude.toFixed(6), unit: '°' },
+        { label: 'Position', value: `${latest.latitude.toFixed(5)}, ${latest.longitude.toFixed(5)}`, unit: '' },
         { label: 'Altitude', value: latest.altitude.toFixed(1), unit: 'm' },
         { label: 'Satellites', value: latest.satellite_count, unit: '' },
         { label: 'Battery', value: latest.battery_voltage.toFixed(2), unit: 'V' },
         { label: 'Max Depth', value: latest.max_depth.toFixed(1), unit: 'm' },
         { label: 'Leak', value: latest.leak_detected ? 'YES' : 'No', unit: '' },
-        { label: 'Last Update', value: latest.created_at ? moment(latest.created_at).fromNow() : '--', unit: '' },
     ];
-    if (distItem) items.push(distItem);
+    if (dist) items.push({ label: 'Distance', value: dist, unit: '' });
+    items.push({ label: 'Updated', value: latest.created_at ? moment(latest.created_at).fromNow() : '--', unit: '' });
 
-    const grid = document.getElementById('telemetry-grid');
-    grid.innerHTML = items.map(t => `<div class="telemetry-item">
-        <div class="label">${t.label}</div>
-        <div class="value" ${t.label === 'Leak' && latest.leak_detected ? 'style="color:#ef4444;"' : ''}>${t.value}<span class="unit">${t.unit}</span></div>
-    </div>`).join('');
+    document.getElementById('telemetry-grid').innerHTML = items.map(t =>
+        `<div class="telemetry-item">
+            <div class="label">${t.label}</div>
+            <div class="value" ${t.label === 'Leak' && latest.leak_detected ? 'style="color:#ef4444;"' : ''}>${t.value}<span class="unit">${t.unit}</span></div>
+        </div>`
+    ).join('');
 
     document.getElementById('track-info').textContent = `${messages.length} messages tracked`;
 }
 
-// ── Bottom Sheet ──
+// ── Bar swipe / tap ──
 
-const sheet = document.getElementById('bottom-sheet');
-const handle = document.getElementById('sheet-handle');
-const locateBtn = document.getElementById('locate-btn');
-const STATES = ['collapsed', 'half', 'expanded'];
-let sheetState = 'half';
+let touchStartY = 0, touchCurrentY = 0;
 
-function setSheetState(state) {
-    sheetState = state;
-    sheet.className = 'bottom-sheet ' + state;
-    const offsets = { collapsed: 62, half: 'calc(45vh + 10px)', expanded: 'calc(85vh + 10px)' };
-    locateBtn.style.bottom = offsets[state];
-}
-
-let touchStartY = 0;
-let touchCurrentY = 0;
-
-handle.addEventListener('touchstart', e => {
+barHandle.addEventListener('touchstart', e => {
     touchStartY = e.touches[0].clientY;
-    sheet.style.transition = 'none';
+    bar.style.transition = 'none';
 }, { passive: true });
 
-handle.addEventListener('touchmove', e => {
+barHandle.addEventListener('touchmove', e => {
     touchCurrentY = e.touches[0].clientY;
     const dy = touchCurrentY - touchStartY;
-    const baseTranslate = sheetState === 'collapsed' ? 'calc(100% - 52px)'
-        : sheetState === 'half' ? 'calc(100% - 45vh)'
-        : '0px';
-    sheet.style.transform = `translateY(calc(${baseTranslate} + ${dy}px))`;
+    if (barState === 'peek') {
+        bar.style.transform = `translateY(${Math.max(dy, -window.innerHeight * 0.6)}px)`;
+    } else if (barState === 'expanded') {
+        bar.style.transform = `translateY(${Math.max(dy, 0)}px)`;
+    }
 }, { passive: true });
 
-handle.addEventListener('touchend', () => {
-    sheet.style.transition = '';
+barHandle.addEventListener('touchend', () => {
+    bar.style.transition = '';
+    bar.style.transform = '';
     const dy = touchCurrentY - touchStartY;
-    const idx = STATES.indexOf(sheetState);
 
-    if (dy < -50 && idx < 2) {
-        setSheetState(STATES[idx + 1]);
-    } else if (dy > 50 && idx > 0) {
-        setSheetState(STATES[idx - 1]);
+    if (barState === 'peek' && dy < -40) {
+        setBarState('expanded');
+    } else if (barState === 'peek' && dy > 60) {
+        dismissDetail();
+    } else if (barState === 'expanded' && dy > 60) {
+        setBarState('peek');
     } else {
-        setSheetState(sheetState);
+        setBarState(barState);
     }
     touchStartY = 0;
     touchCurrentY = 0;
 });
 
-handle.addEventListener('click', () => {
-    const idx = STATES.indexOf(sheetState);
-    if (idx === 0) setSheetState('half');
-    else if (idx === 1) setSheetState('expanded');
-    else setSheetState('half');
+barHandle.addEventListener('click', () => {
+    if (barState === 'peek') setBarState('expanded');
+    else if (barState === 'expanded') setBarState('peek');
 });
 
 // ── Polling ──
 
 function updateTimestamp() {
-    document.getElementById('last-update').textContent = 'Updated ' + moment().format('h:mm:ss A');
+    const onlineCount = devicesData.filter(d => d.latest_message).length;
+    document.getElementById('last-update').textContent =
+        `${onlineCount} unit${onlineCount !== 1 ? 's' : ''} · Updated ${moment().format('h:mm A')}`;
 }
 
 async function poll() {
-    if (currentView === 'summary') {
-        const devices = await fetchDevices();
-        renderSummary(devices);
-    } else if (currentView === 'detail' && currentImei) {
+    const devices = await fetchDevices();
+    if (!currentImei) {
+        renderOverview(devices);
+    } else {
         const device = devicesData.find(d => d.imei === currentImei);
         const messages = await fetchTrack(currentImei);
         renderTrack(messages, device);
@@ -624,7 +575,7 @@ async function poll() {
 
 initMap();
 initGeolocation();
-showSummary();
+fetchDevices().then(devices => { renderOverview(devices); updateTimestamp(); });
 setInterval(poll, POLL_INTERVAL_MS);
 </script>
 </body>
