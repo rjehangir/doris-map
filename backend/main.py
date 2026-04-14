@@ -62,6 +62,27 @@ async def root():
     return RedirectResponse(url="/ui")
 
 
+@app.get("/api/health")
+async def health(db: Session = Depends(get_db)):
+    """Diagnostic: check DB connectivity and return env info."""
+    import os
+
+    db_url = os.getenv("DATABASE_URL", "(not set, using sqlite default)")
+    masked = db_url
+    if "@" in db_url:
+        pre, post = db_url.split("@", 1)
+        masked = pre.rsplit(":", 1)[0] + ":***@" + post
+
+    try:
+        result = db.execute(models.DorisMessage.__table__.select().limit(1))
+        rows = result.fetchall()
+        db_status = f"ok, sample rows: {len(rows)}"
+    except Exception as e:
+        db_status = f"error: {e}"
+
+    return {"database_url": masked, "db_status": db_status}
+
+
 @app.post("/rockblock-webhook")
 async def rockblock_webhook(
     imei: str = Form(...),
