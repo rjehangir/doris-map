@@ -57,30 +57,16 @@ def get_db():
         db.close()
 
 
+def serialize_message(orm_obj) -> dict | None:
+    """Convert a DorisMessage ORM object to a JSON-safe dict via Pydantic."""
+    if orm_obj is None:
+        return None
+    return DorisMessageResponse.model_validate(orm_obj).model_dump(mode="json")
+
+
 @app.get("/")
 async def root():
     return RedirectResponse(url="/ui")
-
-
-@app.get("/api/health")
-async def health(db: Session = Depends(get_db)):
-    """Diagnostic: check DB connectivity and return env info."""
-    import os
-
-    db_url = os.getenv("DATABASE_URL", "(not set, using sqlite default)")
-    masked = db_url
-    if "@" in db_url:
-        pre, post = db_url.split("@", 1)
-        masked = pre.rsplit(":", 1)[0] + ":***@" + post
-
-    try:
-        result = db.execute(models.DorisMessage.__table__.select().limit(1))
-        rows = result.fetchall()
-        db_status = f"ok, sample rows: {len(rows)}"
-    except Exception as e:
-        db_status = f"error: {e}"
-
-    return {"database_url": masked, "db_status": db_status}
 
 
 @app.post("/rockblock-webhook")
@@ -119,59 +105,35 @@ async def rockblock_webhook(
         return {"status": "error", "detail": str(e)}
 
 
-@app.get("/api/devices-debug")
-async def devices_debug(db: Session = Depends(get_db)):
-    """Raw debug endpoint – no response_model, returns dicts."""
-    try:
-        devices = get_devices()
-        result = []
-        for imei, info in devices.items():
-            latest = get_latest_message_per_device(db, imei)
-            entry = {"imei": imei, "name": info.get("name", imei), "latest_message": None}
-            if latest:
-                entry["latest_message"] = {
-                    "id": latest.id,
-                    "device_imei": latest.device_imei,
-                    "latitude": latest.latitude,
-                    "longitude": latest.longitude,
-                    "battery_voltage": latest.battery_voltage,
-                    "created_at": str(latest.created_at),
-                }
-            result.append(entry)
-        return result
-    except Exception as e:
-        return {"error": str(e), "type": type(e).__name__}
-
-
-@app.get("/api/devices", response_model=List[DeviceStatus])
-async def list_devices(db: Session = Depends(get_db)) -> Any:
+@app.get("/api/devices")
+async def list_devices(db: Session = Depends(get_db)):
     """List all configured devices with their latest reported position."""
     devices = get_devices()
     result = []
     for imei, info in devices.items():
         latest = get_latest_message_per_device(db, imei)
-        result.append(
-            DeviceStatus(
-                imei=imei,
-                name=info.get("name", imei),
-                latest_message=latest,
-            )
-        )
+        result.append({
+            "imei": imei,
+            "name": info.get("name", imei),
+            "latest_message": serialize_message(latest),
+        })
     return result
 
 
-@app.get("/api/devices/{imei}/messages", response_model=List[DorisMessageResponse])
+@app.get("/api/devices/{imei}/messages")
 async def device_messages(
     imei: str, skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)
-) -> Any:
+):
     """Get message history for a single device."""
-    return get_device_messages(db, imei, skip, limit)
+    messages = get_device_messages(db, imei, skip, limit)
+    return [serialize_message(m) for m in messages]
 
 
-@app.get("/api/messages/recent", response_model=List[DorisMessageResponse])
-async def recent_messages(hours: int = 24, db: Session = Depends(get_db)) -> Any:
+@app.get("/api/messages/recent")
+async def recent_messages(hours: int = 24, db: Session = Depends(get_db)):
     """Get all messages from all devices within a time window."""
-    return get_recent_messages(db, hours)
+    messages = get_recent_messages(db, hours)
+    return [serialize_message(m) for m in messages]
 
 
 if __name__ == "__main__":
