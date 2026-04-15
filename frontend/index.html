@@ -5,11 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>DORIS Tracker</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; overflow: hidden; }
+        html, body { height: 100%; font-family: 'Helvetica', Arial, sans-serif; overflow: hidden; background: #0E2446; color: #96EEF2; }
+        h1, h2, h3 { font-family: 'Montserrat', sans-serif; }
 
         #app { height: 100%; display: flex; flex-direction: column; }
         #map { flex: 1; z-index: 0; }
@@ -18,13 +20,14 @@
 
         /* Top bar */
         .top-bar {
-            background: #1a1a2e; color: #fff; padding: 8px 12px;
+            background: rgba(14, 36, 70, 0.95); color: #fff; padding: 8px 12px;
             display: flex; align-items: center; justify-content: space-between;
             z-index: 1001; min-height: 44px;
+            backdrop-filter: blur(8px); border-bottom: 1px solid rgba(65, 185, 195, 0.2);
         }
         .top-bar h1 { font-size: 1rem; font-weight: 600; margin: 0; }
-        .top-bar .subtitle { font-size: 0.72rem; opacity: 0.7; }
-        .top-bar .subtitle a { color: #93c5fd; text-decoration: none; opacity: 1; }
+        .top-bar .subtitle { font-size: 0.72rem; color: rgba(150, 238, 242, 0.7); }
+        .top-bar .subtitle a { color: #96EEF2; text-decoration: none; }
         .top-bar .subtitle a:active { text-decoration: underline; }
         .top-bar-logos {
             display: none; align-items: center; gap: 8px;
@@ -37,20 +40,21 @@
             object-fit: cover;
         }
         .top-bar button {
-            background: rgba(255,255,255,0.15); border: none; color: #fff;
+            background: rgba(65, 185, 195, 0.2); border: none; color: #fff;
             padding: 8px 14px; border-radius: 6px; cursor: pointer;
             font-size: 0.85rem; min-width: 44px; min-height: 44px;
         }
-        .top-bar button:hover { background: rgba(255,255,255,0.25); }
+        .top-bar button:hover { background: rgba(65, 185, 195, 0.35); }
 
         /* Detail bar */
         .detail-bar {
             position: fixed; bottom: 0; left: 0; right: 0;
             z-index: 1000;
-            background: rgba(255,255,255,0.97);
+            background: rgba(14, 36, 70, 0.95);
             border-radius: 14px 14px 0 0;
-            box-shadow: 0 -2px 12px rgba(0,0,0,0.10);
+            box-shadow: 0 -2px 12px rgba(0,0,0,0.3);
             backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(65, 185, 195, 0.3);
             transition: transform 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94);
             will-change: transform;
             transform: translateY(100%);
@@ -64,21 +68,21 @@
             padding: 8px 0 4px; cursor: grab; touch-action: none;
         }
         .detail-bar .bar-handle-pip {
-            width: 32px; height: 4px; border-radius: 2px; background: #ccc;
+            width: 32px; height: 4px; border-radius: 2px; background: rgba(65, 185, 195, 0.4);
         }
 
         .peek-row {
             display: flex; align-items: center; gap: 10px;
             padding: 6px 14px 10px; min-height: 44px;
         }
-        .peek-name { font-weight: 600; font-size: 0.92rem; white-space: nowrap; }
+        .peek-name { font-weight: 600; font-size: 0.92rem; white-space: nowrap; color: #fff; font-family: 'Montserrat', sans-serif; }
         .peek-stats {
-            display: flex; gap: 10px; font-size: 0.76rem; color: #555;
+            display: flex; gap: 10px; font-size: 0.76rem; color: #96EEF2;
             overflow-x: auto; white-space: nowrap; flex: 1;
         }
         .peek-stats span { display: inline-flex; align-items: center; gap: 3px; }
         .peek-close {
-            background: none; border: none; font-size: 1.2rem; color: #999;
+            background: none; border: none; font-size: 1.2rem; color: #41B9C3;
             cursor: pointer; padding: 4px 6px; min-width: 32px; min-height: 32px;
             display: flex; align-items: center; justify-content: center;
         }
@@ -88,8 +92,8 @@
             border-radius: 50%; margin-right: 4px; vertical-align: middle; flex-shrink: 0;
         }
         .status-green { background: #22c55e; }
-        .status-red { background: #ef4444; }
-        .status-amber { background: #f59e0b; }
+        .status-red { background: #DD2C1D; }
+        .status-amber { background: #FF9937; }
         .status-gray { background: #9ca3af; }
 
         .expanded-content {
@@ -101,24 +105,25 @@
 
         .telemetry-grid {
             display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px;
-            background: #eee; margin: 0 10px 10px; border-radius: 8px; overflow: hidden;
+            background: rgba(65, 185, 195, 0.15); margin: 0 10px 10px; border-radius: 8px; overflow: hidden;
         }
-        .telemetry-item { background: #fff; padding: 8px 6px; text-align: center; }
-        .telemetry-item .label { font-size: 0.65rem; text-transform: uppercase; color: #888; letter-spacing: 0.4px; }
-        .telemetry-item .value { font-size: 1rem; font-weight: 600; color: #333; margin-top: 1px; }
-        .telemetry-item .unit { font-size: 0.65rem; color: #999; }
-        .track-info { padding: 2px 14px 10px; font-size: 0.75rem; color: #666; }
+        .telemetry-item { background: rgba(0, 77, 100, 0.4); padding: 8px 6px; text-align: center; }
+        .telemetry-item .label { font-size: 0.65rem; text-transform: uppercase; color: #41B9C3; letter-spacing: 0.4px; }
+        .telemetry-item .value { font-size: 1rem; font-weight: 600; color: #FFF8A7; margin-top: 1px; }
+        .telemetry-item .unit { font-size: 0.65rem; color: #96EEF2; }
+        .track-info { padding: 2px 14px 10px; font-size: 0.75rem; color: #41B9C3; }
 
         /* Action row in detail bar */
         .action-row { display: flex; gap: 8px; padding: 0 10px 10px; flex-wrap: wrap; }
         .action-row button {
             flex: 1; padding: 10px; border-radius: 8px; font-weight: 600;
             font-size: 0.82rem; cursor: pointer; min-height: 44px;
-            border: 1.5px solid #e5e7eb; background: #fff; color: #333;
+            border: 1px solid rgba(65, 185, 195, 0.3); background: rgba(14, 36, 70, 0.5); color: #96EEF2;
             display: flex; align-items: center; justify-content: center; gap: 6px;
             transition: background 0.15s; min-width: 0;
         }
-        .action-row button:active { background: #f3f4f6; }
+        .action-row button:active { background: rgba(65, 185, 195, 0.3); }
+        .action-row button:hover { background: rgba(65, 185, 195, 0.2); }
         .action-row button svg { width: 16px; height: 16px; fill: currentColor; flex-shrink: 0; }
 
         /* Locate me button */
@@ -126,27 +131,27 @@
             position: fixed; z-index: 1001;
             right: 12px; bottom: 16px;
             width: 44px; height: 44px; border-radius: 50%;
-            background: #fff; border: none;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            background: rgba(0, 77, 100, 0.9); border: 1px solid rgba(65, 185, 195, 0.3);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             cursor: pointer; display: flex; align-items: center; justify-content: center;
             transition: bottom 0.28s cubic-bezier(0.25,0.46,0.45,0.94);
         }
-        .locate-btn svg { width: 22px; height: 22px; fill: #3b82f6; }
-        .locate-btn:active { background: #f0f4ff; }
+        .locate-btn svg { width: 22px; height: 22px; fill: #41B9C3; }
+        .locate-btn:active { background: rgba(65, 185, 195, 0.3); }
 
-        /* Pulsing blue dot for user location */
+        /* Pulsing cyan dot for user location */
         @keyframes pulse-ring {
             0% { transform: scale(0.8); opacity: 0.8; }
             100% { transform: scale(2.5); opacity: 0; }
         }
         .user-marker-wrapper { position: relative; width: 24px; height: 24px; }
         .user-dot {
-            width: 16px; height: 16px; background: #3b82f6; border-radius: 50%;
+            width: 16px; height: 16px; background: #41B9C3; border-radius: 50%;
             border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.3);
             position: absolute; top: 4px; left: 4px; z-index: 2;
         }
         .user-dot-pulse {
-            width: 16px; height: 16px; background: rgba(59,130,246,0.35);
+            width: 16px; height: 16px; background: rgba(65, 185, 195, 0.35);
             border-radius: 50%; position: absolute; top: 4px; left: 4px; z-index: 1;
             animation: pulse-ring 2s ease-out infinite;
         }
@@ -169,83 +174,115 @@
 
         /* Depth popup */
         .depth-popup .leaflet-popup-content-wrapper {
-            background: rgba(30,30,60,0.88); color: #fff; border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+            background: rgba(14, 36, 70, 0.92); color: #fff; border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+            border: 1px solid rgba(65, 185, 195, 0.2);
         }
         .depth-popup .leaflet-popup-content { margin: 8px 12px; font-size: 0.85rem; font-weight: 500; }
-        .depth-popup .leaflet-popup-tip { background: rgba(30,30,60,0.88); }
-        .depth-popup .leaflet-popup-close-button { color: #fff; }
+        .depth-popup .leaflet-popup-tip { background: rgba(14, 36, 70, 0.92); }
+        .depth-popup .leaflet-popup-close-button { color: #96EEF2; }
 
         /* Distance line tooltip */
         .distance-tooltip {
-            background: rgba(30,30,60,0.88) !important; color: #fff !important;
-            border: none !important; border-radius: 8px !important;
+            background: rgba(14, 36, 70, 0.92) !important; color: #fff !important;
+            border: 1px solid rgba(65, 185, 195, 0.2) !important; border-radius: 8px !important;
             padding: 6px 10px !important; font-size: 0.82rem !important;
-            font-weight: 500 !important; box-shadow: 0 2px 8px rgba(0,0,0,0.25) !important;
+            font-weight: 500 !important; box-shadow: 0 2px 8px rgba(0,0,0,0.35) !important;
             white-space: nowrap !important;
         }
         .distance-tooltip::before { border: none !important; }
 
+        /* Custom scrollbar */
+        .expanded-content::-webkit-scrollbar { width: 8px; }
+        .expanded-content::-webkit-scrollbar-track { background: rgba(14, 36, 70, 0.5); }
+        .expanded-content::-webkit-scrollbar-thumb { background: #41B9C3; border-radius: 4px; }
+        .expanded-content::-webkit-scrollbar-thumb:hover { background: #96EEF2; }
+
+        /* Leaflet popup dark theme for track point popups */
+        .leaflet-popup-content-wrapper { background: rgba(14, 36, 70, 0.92); color: #96EEF2; border: 1px solid rgba(65, 185, 195, 0.2); }
+        .leaflet-popup-tip { background: rgba(14, 36, 70, 0.92); }
+        .leaflet-popup-close-button { color: #96EEF2 !important; }
+
         /* Time filter control */
         .time-filter-control {
-            background: rgba(255,255,255,0.95); border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2); padding: 4px;
+            background: rgba(14, 36, 70, 0.92); border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3); padding: 4px;
             display: flex; flex-wrap: wrap; gap: 2px;
+            border: 1px solid rgba(65, 185, 195, 0.2);
         }
         .time-filter-control button {
             background: none; border: none; cursor: pointer;
             padding: 4px 7px; border-radius: 5px; font-size: 0.68rem;
-            font-weight: 600; color: #555; white-space: nowrap;
+            font-weight: 600; color: #96EEF2; white-space: nowrap;
         }
-        .time-filter-control button:hover { background: #e5e7eb; }
-        .time-filter-control button.active { background: #3b82f6; color: #fff; }
+        .time-filter-control button:hover { background: rgba(65, 185, 195, 0.2); }
+        .time-filter-control button.active { background: linear-gradient(135deg, #41B9C3, #187D8B); color: #fff; }
 
         /* Log Dive map control */
         .dive-start-control {
-            background: rgba(255,255,255,0.95); border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2); padding: 0;
+            background: rgba(14, 36, 70, 0.92); border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3); padding: 0;
+            border: 1px solid rgba(65, 185, 195, 0.2);
         }
         .dive-start-control button {
             display: flex; align-items: center; gap: 5px;
             background: none; border: none; cursor: pointer;
             padding: 6px 10px; border-radius: 8px; font-size: 0.72rem;
-            font-weight: 600; color: #3b82f6; white-space: nowrap;
+            font-weight: 600; color: #41B9C3; white-space: nowrap;
         }
-        .dive-start-control button:hover { background: #eff6ff; }
+        .dive-start-control button:hover { background: rgba(65, 185, 195, 0.15); }
         .dive-start-control button svg { width: 14px; height: 14px; fill: currentColor; flex-shrink: 0; }
 
         /* Modal overlay */
         .modal-overlay {
             position: fixed; inset: 0; z-index: 2000;
-            background: rgba(0,0,0,0.45); backdrop-filter: blur(4px);
+            background: rgba(14, 36, 70, 0.6); backdrop-filter: blur(4px);
             display: flex; align-items: center; justify-content: center;
             padding: 20px;
         }
         .modal-card {
-            background: #fff; border-radius: 14px; padding: 20px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+            background: rgba(0, 77, 100, 0.95); border-radius: 14px; padding: 20px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+            border: 1px solid rgba(65, 185, 195, 0.3);
             max-width: 340px; width: 100%;
         }
-        .modal-card h2 { font-size: 1.05rem; margin-bottom: 8px; color: #1a1a2e; }
-        .modal-card p { font-size: 0.82rem; color: #555; line-height: 1.5; margin-bottom: 14px; }
+        .modal-card h2 { font-size: 1.05rem; margin-bottom: 8px; color: #fff; }
+        .modal-card p { font-size: 0.82rem; color: #96EEF2; line-height: 1.5; margin-bottom: 14px; }
         .modal-field { margin-bottom: 12px; }
-        .modal-field label { display: block; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: #888; letter-spacing: 0.4px; margin-bottom: 4px; }
+        .modal-field label { display: block; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: #41B9C3; letter-spacing: 0.4px; margin-bottom: 4px; }
         .modal-field select {
             width: 100%; padding: 10px; border-radius: 8px;
-            border: 1.5px solid #e5e7eb; font-size: 0.9rem;
-            background: #fff; color: #333; -webkit-appearance: auto;
+            border: 1px solid rgba(65, 185, 195, 0.3); font-size: 0.9rem;
+            background: rgba(14, 36, 70, 0.5); color: #96EEF2; -webkit-appearance: auto;
         }
-        .modal-field .location-text { font-size: 0.85rem; color: #333; font-weight: 500; }
+        .modal-field .location-text { font-size: 0.85rem; color: #FFF8A7; font-weight: 500; }
         .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
         .modal-actions button {
             flex: 1; padding: 11px; border-radius: 8px; font-weight: 600;
-            font-size: 0.85rem; cursor: pointer; min-height: 44px; border: 1.5px solid #e5e7eb;
-            background: #fff; color: #555;
+            font-size: 0.85rem; cursor: pointer; min-height: 44px;
+            border: 1px solid rgba(65, 185, 195, 0.3);
+            background: rgba(14, 36, 70, 0.5); color: #96EEF2;
         }
-        .modal-actions button:active { background: #f3f4f6; }
-        .modal-actions .modal-confirm { background: #3b82f6; color: #fff; border-color: #3b82f6; }
-        .modal-actions .modal-confirm:active { background: #2563eb; }
-        .modal-actions .modal-confirm:disabled { background: #93c5fd; border-color: #93c5fd; cursor: default; }
+        .modal-actions button:active { background: rgba(65, 185, 195, 0.2); }
+        .modal-actions .modal-confirm { background: linear-gradient(135deg, #41B9C3 0%, #187D8B 100%); color: #fff; border-color: transparent; }
+        .modal-actions .modal-confirm:active { background: linear-gradient(135deg, #187D8B 0%, #004D64 100%); }
+        .modal-actions .modal-confirm:disabled { background: rgba(65, 185, 195, 0.3); border-color: transparent; color: rgba(255,255,255,0.5); cursor: default; }
+
+        /* Leaflet control overrides for dark theme */
+        .leaflet-control-layers {
+            background: rgba(14, 36, 70, 0.92) !important;
+            border: 1px solid rgba(65, 185, 195, 0.2) !important;
+            color: #96EEF2 !important;
+        }
+        .leaflet-control-layers-separator { border-top-color: rgba(65, 185, 195, 0.2) !important; }
+        .leaflet-control-zoom a {
+            background: rgba(14, 36, 70, 0.92) !important;
+            color: #96EEF2 !important;
+            border-color: rgba(65, 185, 195, 0.2) !important;
+        }
+        .leaflet-control-zoom a:hover { background: rgba(65, 185, 195, 0.2) !important; }
+        .leaflet-control-attribution { background: rgba(14, 36, 70, 0.7) !important; color: rgba(150, 238, 242, 0.6) !important; }
+        .leaflet-control-attribution a { color: #41B9C3 !important; }
 
         .hidden { display: none !important; }
     </style>
@@ -605,7 +642,7 @@ function onDeviceOrientation(e) {
 function makeUserIcon() {
     if (userHeading != null) {
         const arrowSvg = `<svg class="user-arrow" style="transform:rotate(${userHeading}deg)" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2 L5 20 L12 16 L19 20 Z" fill="#3b82f6" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
+            <path d="M12 2 L5 20 L12 16 L19 20 Z" fill="#41B9C3" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
         </svg>`;
         return L.divIcon({
             className: '',
@@ -688,7 +725,7 @@ function drawDistanceLine(deviceLatLng) {
     const midLng = (userLatLng.lng + deviceLatLng.lng) / 2;
 
     L.polyline([userLatLng, deviceLatLng], {
-        color: '#3b82f6', weight: 2, dashArray: '8, 6', opacity: 0.8,
+        color: '#41B9C3', weight: 2, dashArray: '8, 6', opacity: 0.8,
     }).addTo(lineLayer);
 
     L.tooltip({
@@ -717,8 +754,8 @@ function markerColorForAge(device) {
 
     if (age > STALE_MINUTES) return '#9ca3af';
     if (!device.latest_message) return '#9ca3af';
-    if (device.latest_message.leak_detected) return '#ef4444';
-    if (device.latest_message.battery_voltage != null && device.latest_message.battery_voltage < LOW_VOLTAGE_THRESHOLD) return '#f59e0b';
+    if (device.latest_message.leak_detected) return '#DD2C1D';
+    if (device.latest_message.battery_voltage != null && device.latest_message.battery_voltage < LOW_VOLTAGE_THRESHOLD) return '#FF9937';
     return '#22c55e';
 }
 
@@ -923,7 +960,7 @@ async function showDetail(imei) {
     const voltage = msg && msg.battery_voltage != null ? msg.battery_voltage.toFixed(1) + 'V' : '--';
     const dist = msg ? distanceFromUser(msg.latitude, msg.longitude) : '';
     const distSpan = dist ? `<span>${dist}</span>` : '';
-    const leak = msg && msg.leak_detected ? '<span style="color:#ef4444;font-weight:600;">LEAK</span>' : '';
+    const leak = msg && msg.leak_detected ? '<span style="color:#DD2C1D;font-weight:600;">LEAK</span>' : '';
 
     document.getElementById('peek-row').innerHTML = `
         <span class="status-dot ${statusCls}"></span>
@@ -958,7 +995,7 @@ async function renderTrack(messages, device) {
                     const mk = L.marker([s.latitude, s.longitude], { icon: makeDiveStartIcon(), zIndexOffset: 500 });
                     mk.on('click', e => { L.DomEvent.stopPropagation(e); });
                     const ts = s.created_at ? utc(s.created_at).format('MMM D, h:mm A') : '';
-                    mk.bindPopup(`<b>Dive Start</b><br>${ts}<br><a href="#" onclick="removeDiveStart(${s.id},'${imei}');return false" style="color:#ef4444;font-weight:600;font-size:0.85rem;">Remove</a>`);
+                    mk.bindPopup(`<b>Dive Start</b><br>${ts}<br><a href="#" onclick="removeDiveStart(${s.id},'${imei}');return false" style="color:#DD2C1D;font-weight:600;font-size:0.85rem;">Remove</a>`);
                     markersLayer.addLayer(mk);
                 });
                 if (starts.length && shouldFitBounds) {
@@ -1017,7 +1054,7 @@ async function renderTrack(messages, device) {
                 const mk = L.marker([s.latitude, s.longitude], { icon: makeDiveStartIcon(), zIndexOffset: 500 });
                 mk.on('click', e => { L.DomEvent.stopPropagation(e); });
                 const ts = s.created_at ? utc(s.created_at).format('MMM D, h:mm A') : '';
-                mk.bindPopup(`<b>Dive Start</b><br>${ts}<br><a href="#" onclick="removeDiveStart(${s.id},'${imei}');return false" style="color:#ef4444;font-weight:600;font-size:0.85rem;">Remove</a>`);
+                mk.bindPopup(`<b>Dive Start</b><br>${ts}<br><a href="#" onclick="removeDiveStart(${s.id},'${imei}');return false" style="color:#DD2C1D;font-weight:600;font-size:0.85rem;">Remove</a>`);
                 markersLayer.addLayer(mk);
             });
         } catch (e) {}
@@ -1047,7 +1084,7 @@ async function renderTrack(messages, device) {
     document.getElementById('telemetry-grid').innerHTML = items.map(t =>
         `<div class="telemetry-item">
             <div class="label">${t.label}</div>
-            <div class="value" ${t.label === 'Leak' && latest.leak_detected ? 'style="color:#ef4444;"' : ''}>${t.value}<span class="unit">${t.unit}</span></div>
+            <div class="value" ${t.label === 'Leak' && latest.leak_detected ? 'style="color:#DD2C1D;"' : ''}>${t.value}<span class="unit">${t.unit}</span></div>
         </div>`
     ).join('');
 
