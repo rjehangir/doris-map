@@ -69,6 +69,36 @@ def create_doris_message(
     return db_message
 
 
+def get_all_devices(db: Session):
+    return db.query(models.Device).order_by(models.Device.name).all()
+
+
+def get_device_by_imei(db: Session, imei: str):
+    return db.query(models.Device).filter(models.Device.imei == imei).first()
+
+
+def get_device_name(db: Session, imei: str) -> str:
+    device = get_device_by_imei(db, imei)
+    return device.name if device else imei
+
+
+def create_device(db: Session, imei: str, name: str) -> models.Device:
+    device = models.Device(imei=imei, name=name)
+    db.add(device)
+    db.commit()
+    db.refresh(device)
+    return device
+
+
+def auto_register_device(db: Session, imei: str) -> models.Device:
+    """Create a new device with an auto-incremented name like 'New DORIS 1'."""
+    count = db.query(models.Device).count()
+    name = f"New DORIS {count + 1}"
+    device = create_device(db, imei, name)
+    logger.info(f"Auto-registered device '{name}' for IMEI {imei}")
+    return device
+
+
 def get_latest_message_per_device(db: Session, imei: str):
     return (
         db.query(models.DorisMessage)

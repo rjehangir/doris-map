@@ -27,8 +27,13 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 @pytest.fixture(autouse=True)
 def setup_database():
-    """Create all tables before each test and drop them afterwards."""
+    """Create all tables before each test, seed devices, and drop afterwards."""
     Base.metadata.create_all(bind=engine)
+    from models import Device
+    session = TestingSessionLocal()
+    session.add(Device(imei="301434061119510", name="DORIS 2"))
+    session.commit()
+    session.close()
     yield
     Base.metadata.drop_all(bind=engine)
 

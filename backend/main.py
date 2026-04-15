@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
 import json
+import os
 from datetime import datetime
 from typing import Any, List, Optional
 
@@ -13,12 +14,15 @@ from sqlalchemy.orm import Session
 from starlette.responses import Response as StarletteResponse
 
 import models
-from config import get_device_name, get_devices, load_devices
 from crud import (
+    auto_register_device,
     create_dive_start,
     create_doris_message,
     delete_dive_start,
+    get_all_devices,
+    get_device_by_imei,
     get_device_messages,
+    get_device_name,
     get_dive_starts,
     get_latest_message_per_device,
     get_recent_messages,
@@ -42,7 +46,37 @@ class PrettyJSONResponse(StarletteResponse):
 
 
 models.Base.metadata.create_all(bind=engine)
-load_devices()
+
+
+def migrate_devices_json():
+    """One-time migration: import devices.json into the devices table."""
+    path = os.path.join(os.path.dirname(__file__), "devices.json")
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"Could not read {path}: {e}")
+        return
+
+    db = SessionLocal()
+    try:
+        added = 0
+        for imei, info in data.items():
+            if not get_device_by_imei(db, imei):
+                db.add(models.Device(imei=imei, name=info.get("name", imei)))
+                added += 1
+        if added:
+            db.commit()
+            logger.info(f"Migrated {added} device(s) from devices.json to database")
+        else:
+            logger.info("All devices from devices.json already in database, skipping")
+    finally:
+        db.close()
+
+
+migrate_devices_json()
 
 app = FastAPI(
     title="DORIS Tracker API",
@@ -92,11 +126,10 @@ async def rockblock_webhook(
     db: Session = Depends(get_db),
 ):
     """Receive a RockBLOCK webhook (form-encoded) from Rock Seven."""
-    device_name = get_device_name(imei)
-    if device_name == imei:
-        logger.warning(f"Received message from unknown IMEI: {imei}")
-    else:
-        logger.info(f"Received message from {device_name} (IMEI {imei})")
+    device = get_device_by_imei(db, imei)
+    if not device:
+        device = auto_register_device(db, imei)
+    logger.info(f"Received message from {device.name} (IMEI {imei})")
 
     try:
         message = create_doris_message(
@@ -118,13 +151,13 @@ async def rockblock_webhook(
 @app.get("/api/devices")
 async def list_devices(db: Session = Depends(get_db)):
     """List all configured devices with their latest reported position."""
-    devices = get_devices()
+    devices = get_all_devices(db)
     result = []
-    for imei, info in devices.items():
-        latest = get_latest_message_per_device(db, imei)
+    for device in devices:
+        latest = get_latest_message_per_device(db, device.imei)
         result.append({
-            "imei": imei,
-            "name": info.get("name", imei),
+            "imei": device.imei,
+            "name": device.name,
             "latest_message": serialize_message(latest),
         })
     return result
