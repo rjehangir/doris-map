@@ -276,6 +276,25 @@
         .leaflet-control-attribution { background: rgba(14, 36, 70, 0.7) !important; color: rgba(150, 238, 242, 0.6) !important; }
         .leaflet-control-attribution a { color: #41B9C3 !important; }
 
+        /* Direction arrow HUD */
+        .direction-arrow {
+            position: fixed; left: 50%; transform: translateX(-50%);
+            bottom: 16px; z-index: 1001;
+            width: 40px; height: 40px; border-radius: 50%;
+            background: rgba(14, 36, 70, 0.88);
+            border: 1px solid rgba(65, 185, 195, 0.4);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.25s, bottom 0.28s cubic-bezier(0.25,0.46,0.45,0.94);
+        }
+        .direction-arrow.visible { opacity: 1; }
+        .direction-arrow svg {
+            width: 22px; height: 22px; fill: #41B9C3;
+            transition: transform 0.15s ease;
+            filter: drop-shadow(0 0 3px rgba(65, 185, 195, 0.5));
+        }
+
         .hidden { display: none !important; }
     </style>
 </head>
@@ -297,6 +316,10 @@
 <button class="locate-btn" id="locate-btn" onclick="locateUser()" title="Show my location">
     <svg viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
 </button>
+
+<div class="direction-arrow" id="direction-arrow">
+    <svg viewBox="0 0 24 24"><path d="M12 2 L5 20 L12 16 L19 20 Z"/></svg>
+</div>
 
 <div class="detail-bar" id="detail-bar">
     <div class="detail-header" id="detail-header"></div>
@@ -340,6 +363,7 @@ let hasSavedView = false;
 let shouldFitBounds = true;
 let timeFilterHours = JSON.parse(localStorage.getItem('timeFilterHours'));
 let selectedPointIndex = -1;
+let selectedLatLng = null;
 
 function utc(ts) { return moment.utc(ts).local(); }
 
@@ -595,6 +619,15 @@ async function confirmDiveStart() {
 
 // ── Geolocation ──
 
+let orientationStarted = false;
+
+function startOrientationListeners() {
+    if (orientationStarted) return;
+    orientationStarted = true;
+    window.addEventListener('deviceorientationabsolute', onDeviceOrientation, true);
+    window.addEventListener('deviceorientation', onDeviceOrientation);
+}
+
 function initGeolocation() {
     if (!navigator.geolocation) return;
     navigator.geolocation.watchPosition(
@@ -604,14 +637,17 @@ function initGeolocation() {
                 userHeading = pos.coords.heading;
             }
             updateUserMarker();
+            updateDirectionArrow();
         },
         () => {},
         { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
     );
 
-    if (window.DeviceOrientationEvent) {
-        window.addEventListener('deviceorientationabsolute', onDeviceOrientation, true);
-        window.addEventListener('deviceorientation', onDeviceOrientation);
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+        // iOS 13+ -- defer to user gesture (locateUser tap)
+    } else if (window.DeviceOrientationEvent) {
+        startOrientationListeners();
     }
 }
 
@@ -625,6 +661,7 @@ function onDeviceOrientation(e) {
     if (heading != null && !isNaN(heading)) {
         userHeading = heading;
         updateUserMarkerRotation();
+        updateDirectionArrow();
     }
 }
 
@@ -672,6 +709,14 @@ function updateUserMarkerRotation() {
 }
 
 function locateUser() {
+    if (!orientationStarted &&
+        typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().then(state => {
+            if (state === 'granted') startOrientationListeners();
+        }).catch(() => {});
+    }
+
     if (userLatLng) {
         map.setView(userLatLng, 14);
     } else if (navigator.geolocation) {
@@ -802,6 +847,7 @@ function makeSelectedPointIcon() {
 function selectPoint(msg, index, messages, device) {
     highlightLayer.clearLayers();
     selectedPointIndex = index;
+    selectedLatLng = L.latLng(msg.latitude, msg.longitude);
 
     const hlMarker = L.marker([msg.latitude, msg.longitude], {
         icon: makeSelectedPointIcon(), zIndexOffset: 900
@@ -809,7 +855,8 @@ function selectPoint(msg, index, messages, device) {
     hlMarker.on('click', e => { L.DomEvent.stopPropagation(e); });
     highlightLayer.addLayer(hlMarker);
 
-    drawDistanceLine(L.latLng(msg.latitude, msg.longitude));
+    drawDistanceLine(selectedLatLng);
+    updateDirectionArrow();
 
     const name = device ? device.name : '?';
     const isLatest = index === messages.length - 1;
@@ -842,7 +889,11 @@ function selectPoint(msg, index, messages, device) {
 
     document.getElementById('detail-telemetry').innerHTML = telem.join('');
 
-    requestAnimationFrame(() => { locateBtn.style.bottom = (bar.offsetHeight + 12) + 'px'; });
+    requestAnimationFrame(() => {
+        const offset = bar.offsetHeight + 12;
+        locateBtn.style.bottom = offset + 'px';
+        directionArrow.style.bottom = offset + 'px';
+    });
 }
 
 function makeDiveStartIcon() {
@@ -973,7 +1024,21 @@ function onMarkerClick(device) {
 
 const bar = document.getElementById('detail-bar');
 const locateBtn = document.getElementById('locate-btn');
+const directionArrow = document.getElementById('direction-arrow');
 let barVisible = false;
+
+function updateDirectionArrow() {
+    if (!selectedLatLng || userLatLng == null || userHeading == null) {
+        directionArrow.classList.remove('visible');
+        return;
+    }
+    const bearing = compassBearing(userLatLng, selectedLatLng);
+    const relative = (bearing.degrees - userHeading + 360) % 360;
+    const svg = directionArrow.querySelector('svg');
+    svg.style.transform = `rotate(${relative}deg)`;
+    directionArrow.classList.add('visible');
+    directionArrow.style.bottom = barVisible ? (bar.offsetHeight + 12) + 'px' : '16px';
+}
 
 const ICONS = {
     sat: '<svg viewBox="0 0 24 24"><path d="M19.07 4.93l-1.41 1.41A8.014 8.014 0 0 1 20 12c0 2.21-.9 4.21-2.34 5.66l1.41 1.41A9.969 9.969 0 0 0 22 12c0-2.76-1.12-5.26-2.93-7.07zM17.24 6.76l-1.41 1.41A4.007 4.007 0 0 1 17 12c0 1.1-.45 2.1-1.17 2.83l1.41 1.41A5.976 5.976 0 0 0 19 12c0-1.66-.67-3.16-1.76-4.24zM12 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM6.93 4.93L5.52 3.52A9.969 9.969 0 0 0 2 12c0 2.76 1.12 5.26 2.93 7.07l1.41-1.41A8.014 8.014 0 0 1 4 12c0-2.21.9-4.21 2.34-5.66l-.41-1.41zM8.17 7.17L6.76 5.76A5.976 5.976 0 0 0 5 12c0 1.66.67 3.16 1.76 4.24l1.41-1.41A4.007 4.007 0 0 1 7 12c0-1.1.45-2.1 1.17-2.83z"/></svg>',
@@ -989,21 +1054,26 @@ const ICONS = {
 function showBar() {
     barVisible = true;
     bar.classList.add('visible');
-    locateBtn.style.bottom = (bar.offsetHeight + 12) + 'px';
+    const offset = bar.offsetHeight + 12;
+    locateBtn.style.bottom = offset + 'px';
+    directionArrow.style.bottom = offset + 'px';
 }
 
 function hideBar() {
     barVisible = false;
     bar.classList.remove('visible');
     locateBtn.style.bottom = '16px';
+    directionArrow.style.bottom = '16px';
 }
 
 function dismissDetail() {
     shouldFitBounds = true;
     currentImei = null;
     selectedPointIndex = -1;
+    selectedLatLng = null;
     clearDistanceLine();
     highlightLayer.clearLayers();
+    directionArrow.classList.remove('visible');
     hideBar();
     trackLayer.clearLayers();
     markersLayer.clearLayers();
