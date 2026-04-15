@@ -305,7 +305,7 @@ let userLatLng = null;
 let userHeading = null;
 let userMarker = null;
 let hasSavedView = false;
-let timeFilterHours = null;
+let timeFilterHours = JSON.parse(localStorage.getItem('timeFilterHours'));
 
 function utc(ts) { return moment.utc(ts).local(); }
 
@@ -383,12 +383,14 @@ function initTimeFilterControl() {
             const container = L.DomUtil.create('div', 'time-filter-control');
             L.DomEvent.disableClickPropagation(container);
             TIME_PRESETS.forEach(p => {
-                const btn = L.DomUtil.create('button', p.hours === null ? 'active' : '', container);
+                const isActive = p.hours === timeFilterHours;
+                const btn = L.DomUtil.create('button', isActive ? 'active' : '', container);
                 btn.textContent = p.label;
                 btn.addEventListener('click', () => {
                     container.querySelectorAll('button').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     timeFilterHours = p.hours;
+                    localStorage.setItem('timeFilterHours', JSON.stringify(p.hours));
                     onTimeFilterChange();
                 });
             });
@@ -750,6 +752,19 @@ async function fetchTrack(imei) {
     }
 }
 
+async function removeDiveStart(id, imei) {
+    if (!confirm('Remove this dive start marker?')) return;
+    try {
+        await fetch(`/api/dive-start/${id}`, { method: 'DELETE' });
+        map.closePopup();
+        const device = devicesData.find(d => d.imei === imei);
+        const messages = await fetchTrack(imei);
+        renderTrack(messages, device);
+    } catch (e) {
+        alert('Failed to remove dive start.');
+    }
+}
+
 async function fetchDiveStarts(imei) {
     try {
         const resp = await fetch(`/api/dive-starts/${imei}`);
@@ -913,9 +928,11 @@ async function renderTrack(messages, device) {
         try {
             const starts = await fetchDiveStarts(imei);
             starts.forEach(s => {
-                const m = L.marker([s.latitude, s.longitude], { icon: makeDiveStartIcon(), zIndexOffset: 500 });
-                m.bindPopup(`<b>Dive Start</b><br>${s.created_at ? utc(s.created_at).format('MMM D, h:mm A') : ''}`);
-                markersLayer.addLayer(m);
+                const mk = L.marker([s.latitude, s.longitude], { icon: makeDiveStartIcon(), zIndexOffset: 500 });
+                mk.on('click', e => { L.DomEvent.stopPropagation(e); });
+                const ts = s.created_at ? utc(s.created_at).format('MMM D, h:mm A') : '';
+                mk.bindPopup(`<b>Dive Start</b><br>${ts}<br><a href="#" onclick="removeDiveStart(${s.id},'${imei}');return false" style="color:#ef4444;font-weight:600;font-size:0.85rem;">Remove</a>`);
+                markersLayer.addLayer(mk);
             });
         } catch (e) {}
     }

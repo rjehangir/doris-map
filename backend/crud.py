@@ -131,3 +131,13 @@ def get_dive_starts(db: Session, imei: str):
         .order_by(models.DiveStart.id.desc())
         .all()
     )
+
+
+def delete_dive_start(db: Session, dive_start_id: int) -> bool:
+    obj = db.query(models.DiveStart).filter(models.DiveStart.id == dive_start_id).first()
+    if obj is None:
+        return False
+    db.delete(obj)
+    db.commit()
+    logger.info(f"Deleted dive start id={dive_start_id}")
+    return True

@@ -17,6 +17,7 @@ from config import get_device_name, get_devices, load_devices
 from crud import (
     create_dive_start,
     create_doris_message,
+    delete_dive_start,
     get_device_messages,
     get_dive_starts,
     get_latest_message_per_device,
@@ -170,6 +171,15 @@ async def list_dive_starts(imei: str, db: Session = Depends(get_db)):
     """Get all dive start markers for a device."""
     starts = get_dive_starts(db, imei)
     return [serialize_dive_start(s) for s in starts]
+
+
+@app.delete("/api/dive-start/{dive_start_id}")
+async def remove_dive_start(dive_start_id: int, db: Session = Depends(get_db)):
+    """Delete a dive start marker by ID."""
+    deleted = delete_dive_start(db, dive_start_id)
+    if not deleted:
+        return {"status": "not_found"}
+    return {"status": "ok"}
 
 
 if __name__ == "__main__":
