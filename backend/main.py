@@ -26,9 +26,10 @@ from crud import (
     get_dive_starts,
     get_latest_message_per_device,
     get_recent_messages,
+    update_dive_start,
 )
 from database import SessionLocal, engine
-from schemas import DiveStartCreate, DiveStartResponse, DorisMessageResponse
+from schemas import DiveStartCreate, DiveStartResponse, DiveStartUpdate, DorisMessageResponse
 
 
 class PrettyJSONResponse(StarletteResponse):
@@ -77,6 +78,25 @@ def migrate_devices_json():
 
 
 migrate_devices_json()
+
+
+def migrate_dive_start_columns():
+    """Add name and notes columns to dive_starts if missing."""
+    from sqlalchemy import inspect as sa_inspect, text
+    insp = sa_inspect(engine)
+    if "dive_starts" not in insp.get_table_names():
+        return
+    cols = {c["name"] for c in insp.get_columns("dive_starts")}
+    with engine.begin() as conn:
+        if "name" not in cols:
+            conn.execute(text("ALTER TABLE dive_starts ADD COLUMN name VARCHAR"))
+            logger.info("Added 'name' column to dive_starts")
+        if "notes" not in cols:
+            conn.execute(text("ALTER TABLE dive_starts ADD COLUMN notes VARCHAR"))
+            logger.info("Added 'notes' column to dive_starts")
+
+
+migrate_dive_start_columns()
 
 app = FastAPI(
     title="DORIS Tracker API",
@@ -204,6 +224,15 @@ async def list_dive_starts(imei: str, db: Session = Depends(get_db)):
     """Get all dive start markers for a device."""
     starts = get_dive_starts(db, imei)
     return [serialize_dive_start(s) for s in starts]
+
+
+@app.patch("/api/dive-start/{dive_start_id}")
+async def patch_dive_start(dive_start_id: int, body: DiveStartUpdate, db: Session = Depends(get_db)):
+    """Update dive start name and/or notes."""
+    obj = update_dive_start(db, dive_start_id, body)
+    if not obj:
+        return {"status": "not_found"}
+    return serialize_dive_start(obj)
 
 
 @app.delete("/api/dive-start/{dive_start_id}")

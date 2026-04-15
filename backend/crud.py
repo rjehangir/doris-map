@@ -143,6 +143,7 @@ def create_dive_start(
         device_imei=data.device_imei,
         latitude=data.latitude,
         longitude=data.longitude,
+        name=data.name,
     )
     db.add(obj)
     db.commit()
@@ -161,6 +162,22 @@ def get_dive_starts(db: Session, imei: str):
         .order_by(models.DiveStart.id.desc())
         .all()
     )
+
+
+def update_dive_start(
+    db: Session, dive_start_id: int, data: schemas.DiveStartUpdate
+) -> models.DiveStart | None:
+    obj = db.query(models.DiveStart).filter(models.DiveStart.id == dive_start_id).first()
+    if obj is None:
+        return None
+    if data.name is not None:
+        obj.name = data.name
+    if data.notes is not None:
+        obj.notes = data.notes
+    db.commit()
+    db.refresh(obj)
+    logger.info(f"Updated dive start id={dive_start_id}")
+    return obj
 
 
 def delete_dive_start(db: Session, dive_start_id: int) -> bool:

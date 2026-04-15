@@ -49,6 +49,12 @@ class DiveStartCreate(BaseModel):
     device_imei: str
     latitude: float
     longitude: float
+    name: Optional[str] = None
+
+
+class DiveStartUpdate(BaseModel):
+    name: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class DiveStartResponse(BaseModel):
@@ -56,6 +62,8 @@ class DiveStartResponse(BaseModel):
     device_imei: str
     latitude: float
     longitude: float
+    name: Optional[str] = None
+    notes: Optional[str] = None
     created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

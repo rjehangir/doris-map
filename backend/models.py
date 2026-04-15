@@ -42,4 +42,6 @@ class DiveStart(Base):
     device_imei = Column(String, index=True)
     latitude = Column(Float)
     longitude = Column(Float)
+    name = Column(String, nullable=True)
+    notes = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

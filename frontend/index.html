@@ -113,6 +113,26 @@
         .detail-track {
             padding: 1px 10px 4px; font-size: 0.66rem; color: rgba(65, 185, 195, 0.6);
         }
+        .detail-subtitle {
+            padding: 0 10px; font-size: 0.68rem; color: #96EEF2;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .dive-field {
+            display: flex; align-items: center; gap: 4px; padding: 2px 10px;
+            font-size: 0.74rem;
+        }
+        .dive-field label {
+            color: rgba(150,238,242,0.6); min-width: 42px; flex-shrink: 0;
+        }
+        .dive-field input, .dive-field textarea {
+            flex: 1; background: rgba(0,77,100,0.5); border: 1px solid rgba(65,185,195,0.3);
+            border-radius: 4px; color: #FFF8A7; padding: 3px 6px; font-size: 0.74rem;
+            font-family: 'Montserrat', sans-serif; outline: none;
+        }
+        .dive-field input:focus, .dive-field textarea:focus {
+            border-color: #41B9C3;
+        }
+        .dive-field textarea { resize: none; height: 44px; }
 
         /* Locate me button */
         .locate-btn {
@@ -322,7 +342,9 @@
 
 <div class="detail-bar" id="detail-bar">
     <div class="detail-header" id="detail-header"></div>
+    <div class="detail-subtitle" id="detail-subtitle"></div>
     <div class="detail-telemetry" id="detail-telemetry"></div>
+    <div id="detail-dive-fields"></div>
     <div class="detail-track" id="detail-track"></div>
 </div>
 
@@ -363,6 +385,8 @@ let shouldFitBounds = true;
 let timeFilterHours = JSON.parse(localStorage.getItem('timeFilterHours'));
 let selectedPointIndex = -1;
 let selectedLatLng = null;
+let currentDiveStarts = [];
+let diveStartForMsgIndex = {};
 
 function utc(ts) { return moment.utc(ts).local(); }
 
@@ -507,6 +531,7 @@ function initTimeFilterControl() {
                     btn.classList.add('active');
                     timeFilterHours = p.hours;
                     localStorage.setItem('timeFilterHours', JSON.stringify(p.hours));
+                    updateHash();
                     onTimeFilterChange();
                 });
             });
@@ -878,6 +903,10 @@ function selectPoint(msg, index, messages, device) {
         <span class="detail-actions">${buildActionButtons(msg, name)}</span>
     `;
 
+    const linkedDive = diveStartForMsgIndex[index];
+    document.getElementById('detail-subtitle').textContent =
+        linkedDive ? (linkedDive.name || 'Unnamed dive') : '';
+
     const telem = [];
     telem.push(`<span class="telem-item">${ICONS.pin}<span class="tv">${msg.latitude.toFixed(5)}, ${msg.longitude.toFixed(5)}</span></span>`);
     telem.push(`<span class="telem-item">${ICONS.sat}<span class="tv">${msg.satellite_count != null ? msg.satellite_count : '--'}</span></span>`);
@@ -894,6 +923,7 @@ function selectPoint(msg, index, messages, device) {
     telem.push(`<span class="telem-item">${ICONS.clock}<span class="tv">${msg.created_at ? utc(msg.created_at).format('MMM D, h:mm A') : '--'}</span></span>`);
 
     document.getElementById('detail-telemetry').innerHTML = telem.join('');
+    document.getElementById('detail-dive-fields').innerHTML = '';
 
     requestAnimationFrame(() => {
         const offset = bar.offsetHeight + 12;
@@ -962,13 +992,98 @@ async function removeDiveStart(id, imei) {
     if (!confirm('Remove this dive start marker?')) return;
     try {
         await fetch(`/api/dive-start/${id}`, { method: 'DELETE' });
-        map.closePopup();
         const device = devicesData.find(d => d.imei === imei);
         const messages = await fetchTrack(imei);
         renderTrack(messages, device);
     } catch (e) {
         alert('Failed to remove dive start.');
     }
+}
+
+async function patchDiveStart(id, body) {
+    try {
+        await fetch(`/api/dive-start/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+    } catch (e) {
+        console.error('Failed to patch dive start:', e);
+    }
+}
+
+function selectDiveStart(ds, device) {
+    highlightLayer.clearLayers();
+    selectedPointIndex = -1;
+    selectedLatLng = L.latLng(ds.latitude, ds.longitude);
+
+    const hlMarker = L.marker([ds.latitude, ds.longitude], {
+        icon: makeSelectedPointIcon(), zIndexOffset: 900
+    });
+    hlMarker.on('click', e => { L.DomEvent.stopPropagation(e); });
+    highlightLayer.addLayer(hlMarker);
+
+    drawDistanceLine(selectedLatLng);
+    updateDirectionArrow();
+
+    const dName = device ? device.name : '?';
+    const imei = device ? device.imei : ds.device_imei;
+    const timeAgo = ds.created_at ? utc(ds.created_at).fromNow() : '--';
+    const dist = distanceFromUser(ds.latitude, ds.longitude);
+
+    document.getElementById('detail-header').innerHTML = `
+        <span class="status-dot" style="background:#FF9937;"></span>
+        <span class="detail-name">${dName}</span>
+        <span class="detail-summary">${dist ? `<span>${dist}</span>` : ''}<span>${timeAgo}</span></span>
+        <span class="detail-actions">
+            <button class="btn-close" onclick="dismissDetail()" title="Close">&times;</button>
+        </span>
+    `;
+    document.getElementById('detail-subtitle').textContent = 'Dive Start';
+
+    const telem = [];
+    telem.push(`<span class="telem-item">${ICONS.pin}<span class="tv">${ds.latitude.toFixed(5)}, ${ds.longitude.toFixed(5)}</span></span>`);
+    telem.push(`<span class="telem-item">${ICONS.clock}<span class="tv">${ds.created_at ? utc(ds.created_at).format('MMM D, h:mm A') : '--'}</span></span>`);
+    document.getElementById('detail-telemetry').innerHTML = telem.join('');
+
+    const fieldsEl = document.getElementById('detail-dive-fields');
+    fieldsEl.innerHTML = `
+        <div class="dive-field">
+            <label>Name</label>
+            <input id="dive-name-input" type="text" value="${(ds.name || '').replace(/"/g, '&quot;')}" placeholder="Dive name">
+        </div>
+        <div class="dive-field">
+            <label>Notes</label>
+            <input id="dive-notes-input" type="text" value="${(ds.notes || '').replace(/"/g, '&quot;')}" placeholder="Notes">
+        </div>
+        <div class="dive-field" style="justify-content:flex-end; gap:8px;">
+            <button onclick="removeDiveStart(${ds.id},'${imei}')" style="background:rgba(221,44,29,0.15); color:#DD2C1D; border:1px solid rgba(221,44,29,0.3); border-radius:4px; padding:3px 10px; cursor:pointer; font-size:0.72rem; font-family:'Montserrat',sans-serif;">Remove</button>
+        </div>
+    `;
+
+    const nameInput = document.getElementById('dive-name-input');
+    const notesInput = document.getElementById('dive-notes-input');
+
+    let saveTimer = null;
+    function scheduleSave() {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+            const newName = nameInput.value.trim();
+            const newNotes = notesInput.value.trim();
+            patchDiveStart(ds.id, { name: newName || null, notes: newNotes || null });
+            ds.name = newName || null;
+            ds.notes = newNotes || null;
+        }, 600);
+    }
+    nameInput.addEventListener('input', scheduleSave);
+    notesInput.addEventListener('input', scheduleSave);
+
+    showBar();
+    requestAnimationFrame(() => {
+        const offset = bar.offsetHeight + 12;
+        locateBtn.style.bottom = offset + 'px';
+        directionArrow.style.bottom = offset + 'px';
+    });
 }
 
 async function fetchDiveStarts(imei) {
@@ -1055,6 +1170,7 @@ const ICONS = {
     clock: '<svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>',
     copy: '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>',
     maps: '<svg viewBox="0 0 24 24"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>',
+    share: '<svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>',
 };
 
 function showBar() {
@@ -1077,12 +1193,17 @@ function dismissDetail() {
     currentImei = null;
     selectedPointIndex = -1;
     selectedLatLng = null;
+    currentDiveStarts = [];
+    diveStartForMsgIndex = {};
+    updateHash();
     clearDistanceLine();
     highlightLayer.clearLayers();
     directionArrow.classList.remove('visible');
     hideBar();
     trackLayer.clearLayers();
     markersLayer.clearLayers();
+    document.getElementById('detail-subtitle').textContent = '';
+    document.getElementById('detail-dive-fields').innerHTML = '';
     renderOverview(devicesData);
 }
 
@@ -1096,12 +1217,14 @@ function buildActionButtons(latest, deviceName) {
         : `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
     return `<button onclick="copyCoords('${coordStr}', this)" title="Copy coordinates">${ICONS.copy}</button>`
         + `<button onclick="window.open('${mapsUrl}', '_blank')" title="Open in Maps">${ICONS.maps}</button>`
+        + `<button onclick="shareDevice(this)" title="Share link">${ICONS.share}</button>`
         + `<button class="btn-close" onclick="dismissDetail()" title="Close">&times;</button>`;
 }
 
 async function showDetail(imei) {
     shouldFitBounds = true;
     currentImei = imei;
+    updateHash();
     const device = devicesData.find(d => d.imei === imei);
     const name = device ? device.name : imei;
     const msg = device ? device.latest_message : null;
@@ -1118,6 +1241,8 @@ async function showDetail(imei) {
         <span class="detail-actions">${msg ? buildActionButtons(msg, name) : `<button class="btn-close" onclick="dismissDetail()" title="Close">&times;</button>`}</span>
     `;
     document.getElementById('detail-telemetry').innerHTML = '';
+    document.getElementById('detail-subtitle').textContent = '';
+    document.getElementById('detail-dive-fields').innerHTML = '';
     document.getElementById('detail-track').textContent = '';
 
     showBar();
@@ -1131,38 +1256,75 @@ async function renderTrack(messages, device) {
     markersLayer.clearLayers();
     trackLayer.clearLayers();
     highlightLayer.clearLayers();
+    const prevSelectedIndex = selectedPointIndex;
     selectedPointIndex = -1;
+    currentDiveStarts = [];
+    diveStartForMsgIndex = {};
 
     const name = device ? device.name : '?';
     const imei = device ? device.imei : null;
+
+    let starts = [];
+    if (imei) {
+        try { starts = await fetchDiveStarts(imei); } catch (e) {}
+    }
+    currentDiveStarts = starts;
 
     if (!messages.length) {
         document.getElementById('detail-telemetry').innerHTML =
             '<span class="telem-item"><span class="tv" style="color:#9ca3af;">No messages</span></span>';
         document.getElementById('detail-track').textContent = '';
-        if (imei) {
-            try {
-                const starts = await fetchDiveStarts(imei);
-                starts.forEach(s => {
-                    const mk = L.marker([s.latitude, s.longitude], { icon: makeDiveStartIcon(), zIndexOffset: 500 });
-                    mk.on('click', e => { L.DomEvent.stopPropagation(e); });
-                    const ts = s.created_at ? utc(s.created_at).format('MMM D, h:mm A') : '';
-                    mk.bindPopup(`<b>Dive Start</b><br>${ts}<br><a href="#" onclick="removeDiveStart(${s.id},'${imei}');return false" style="color:#DD2C1D;font-weight:600;font-size:0.85rem;">Remove</a>`);
-                    markersLayer.addLayer(mk);
-                });
-                if (starts.length && shouldFitBounds) {
-                    const fb = starts.map(s => [s.latitude, s.longitude]);
-                    if (userLatLng && userLatLng.distanceTo(L.latLng(starts[0].latitude, starts[0].longitude)) <= 2000) {
-                        fb.push([userLatLng.lat, userLatLng.lng]);
-                    }
-                    map.fitBounds(fb, { padding: [50, 50], maxZoom: 16 });
-                }
-            } catch (e) {}
+        document.getElementById('detail-subtitle').textContent = '';
+        document.getElementById('detail-dive-fields').innerHTML = '';
+        starts.forEach(s => {
+            const mk = L.marker([s.latitude, s.longitude], { icon: makeDiveStartIcon(), zIndexOffset: 500 });
+            mk.on('click', e => {
+                L.DomEvent.stopPropagation(e);
+                selectDiveStart(s, device);
+            });
+            markersLayer.addLayer(mk);
+        });
+        if (starts.length && shouldFitBounds) {
+            const fb = starts.map(s => [s.latitude, s.longitude]);
+            if (userLatLng && userLatLng.distanceTo(L.latLng(starts[0].latitude, starts[0].longitude)) <= 2000) {
+                fb.push([userLatLng.lat, userLatLng.lng]);
+            }
+            map.fitBounds(fb, { padding: [50, 50], maxZoom: 16 });
         }
         return;
     }
 
     const dives = segmentDives(messages);
+
+    // Link dive starts to message segments
+    const sortedStarts = [...starts].sort((a, b) =>
+        new Date(a.created_at) - new Date(b.created_at)
+    );
+    const diveStartForSegment = {};
+    const segmentForDiveStart = {};
+    sortedStarts.forEach(ds => {
+        const dsTime = moment.utc(ds.created_at);
+        for (let si = 0; si < dives.length; si++) {
+            if (segmentForDiveStart[ds.id] !== undefined) break;
+            const firstMsg = dives[si].messages[0];
+            const firstTime = moment.utc(firstMsg.created_at);
+            if (firstTime.isAfter(dsTime) && diveStartForSegment[si] === undefined) {
+                diveStartForSegment[si] = ds;
+                segmentForDiveStart[ds.id] = si;
+                break;
+            }
+        }
+    });
+
+    // Build per-message-index lookup
+    let globalIdx = 0;
+    dives.forEach((dive, si) => {
+        const ds = diveStartForSegment[si];
+        dive.messages.forEach(() => {
+            if (ds) diveStartForMsgIndex[globalIdx] = ds;
+            globalIdx++;
+        });
+    });
 
     dives.forEach((dive, di) => {
         const coords = dive.messages.map(m => [m.latitude, m.longitude]);
@@ -1203,18 +1365,14 @@ async function renderTrack(messages, device) {
         }
     });
 
-    if (imei) {
-        try {
-            const starts = await fetchDiveStarts(imei);
-            starts.forEach(s => {
-                const mk = L.marker([s.latitude, s.longitude], { icon: makeDiveStartIcon(), zIndexOffset: 500 });
-                mk.on('click', e => { L.DomEvent.stopPropagation(e); });
-                const ts = s.created_at ? utc(s.created_at).format('MMM D, h:mm A') : '';
-                mk.bindPopup(`<b>Dive Start</b><br>${ts}<br><a href="#" onclick="removeDiveStart(${s.id},'${imei}');return false" style="color:#DD2C1D;font-weight:600;font-size:0.85rem;">Remove</a>`);
-                markersLayer.addLayer(mk);
-            });
-        } catch (e) {}
-    }
+    starts.forEach(s => {
+        const mk = L.marker([s.latitude, s.longitude], { icon: makeDiveStartIcon(), zIndexOffset: 500 });
+        mk.on('click', e => {
+            L.DomEvent.stopPropagation(e);
+            selectDiveStart(s, device);
+        });
+        markersLayer.addLayer(mk);
+    });
 
     if (shouldFitBounds) {
         const fb = messages.map(m => [m.latitude, m.longitude]);
@@ -1224,10 +1382,19 @@ async function renderTrack(messages, device) {
         map.fitBounds(fb, { padding: [50, 50], maxZoom: 16 });
     }
 
+    // Track summary with dive names
+    const segLabels = dives.map((dive, si) => {
+        const ds = diveStartForSegment[si];
+        const count = dive.messages.length;
+        if (ds) return `${count} msg — ${ds.name || 'Unnamed dive'}`;
+        return `${count} msg`;
+    });
     document.getElementById('detail-track').textContent =
-        `${messages.length} msg · ${dives.length} dive${dives.length !== 1 ? 's' : ''}`;
+        segLabels.length === 1 ? segLabels[0] : segLabels.join(' · ');
 
-    selectPoint(latest, messages.length - 1, messages, device);
+    const restoreIndex = (prevSelectedIndex >= 0 && prevSelectedIndex < messages.length)
+        ? prevSelectedIndex : messages.length - 1;
+    selectPoint(messages[restoreIndex], restoreIndex, messages, device);
 }
 
 async function copyCoords(text, btn) {
@@ -1288,12 +1455,81 @@ async function requestWakeLock() {
     } catch (e) {}
 }
 
+// ── Deep Link ──
+
+function parseHash() {
+    const params = {};
+    const hash = window.location.hash.replace(/^#/, '');
+    if (!hash) return params;
+    hash.split('&').forEach(pair => {
+        const [k, v] = pair.split('=');
+        if (k && v) params[decodeURIComponent(k)] = decodeURIComponent(v);
+    });
+    return params;
+}
+
+function updateHash() {
+    if (!currentImei) {
+        history.replaceState(null, '', window.location.pathname);
+        return;
+    }
+    let hash = 'device=' + currentImei;
+    if (timeFilterHours !== null) hash += '&tf=' + timeFilterHours;
+    history.replaceState(null, '', window.location.pathname + '#' + hash);
+}
+
+function buildShareUrl() {
+    let url = window.location.origin + '/ui#device=' + currentImei;
+    if (timeFilterHours !== null) url += '&tf=' + timeFilterHours;
+    return url;
+}
+
+async function shareDevice(btn) {
+    const url = buildShareUrl();
+    if (navigator.share) {
+        try { await navigator.share({ url }); } catch (e) {}
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(url);
+    } catch (e) {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+    }
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+    setTimeout(() => { btn.innerHTML = orig; }, 1200);
+}
+
 // ── Init ──
 
 initMap();
 initGeolocation();
 initWakeLock();
-fetchDevices().then(devices => { renderOverview(devices); updateTimestamp(); });
+fetchDevices().then(devices => {
+    renderOverview(devices);
+    updateTimestamp();
+
+    const hashParams = parseHash();
+    if (hashParams.tf != null) {
+        const tf = hashParams.tf === 'null' ? null : parseFloat(hashParams.tf);
+        timeFilterHours = tf;
+        localStorage.setItem('timeFilterHours', JSON.stringify(tf));
+        document.querySelectorAll('.time-filter-control button').forEach(btn => {
+            btn.classList.remove('active');
+            const preset = TIME_PRESETS.find(p => p.label === btn.textContent);
+            if (preset && preset.hours === tf) btn.classList.add('active');
+        });
+    }
+    if (hashParams.device) {
+        const device = devicesData.find(d => d.imei === hashParams.device);
+        if (device) showDetail(device.imei);
+    }
+});
 setInterval(poll, POLL_INTERVAL_MS);
 </script>
 </body>
