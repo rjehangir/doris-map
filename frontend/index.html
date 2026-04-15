@@ -111,8 +111,6 @@
         }
         .action-row button:active { background: #f3f4f6; }
         .action-row button svg { width: 16px; height: 16px; fill: currentColor; flex-shrink: 0; }
-        .action-row button.dive-btn { border-color: #3b82f6; color: #3b82f6; }
-        .action-row button.dive-btn:active { background: #eff6ff; }
 
         /* Locate me button */
         .locate-btn {
@@ -192,6 +190,53 @@
         .time-filter-control button:hover { background: #e5e7eb; }
         .time-filter-control button.active { background: #3b82f6; color: #fff; }
 
+        /* Log Dive map control */
+        .dive-start-control {
+            background: rgba(255,255,255,0.95); border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2); padding: 0;
+        }
+        .dive-start-control button {
+            display: flex; align-items: center; gap: 5px;
+            background: none; border: none; cursor: pointer;
+            padding: 6px 10px; border-radius: 8px; font-size: 0.72rem;
+            font-weight: 600; color: #3b82f6; white-space: nowrap;
+        }
+        .dive-start-control button:hover { background: #eff6ff; }
+        .dive-start-control button svg { width: 14px; height: 14px; fill: currentColor; flex-shrink: 0; }
+
+        /* Modal overlay */
+        .modal-overlay {
+            position: fixed; inset: 0; z-index: 2000;
+            background: rgba(0,0,0,0.45); backdrop-filter: blur(4px);
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        .modal-card {
+            background: #fff; border-radius: 14px; padding: 20px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+            max-width: 340px; width: 100%;
+        }
+        .modal-card h2 { font-size: 1.05rem; margin-bottom: 8px; color: #1a1a2e; }
+        .modal-card p { font-size: 0.82rem; color: #555; line-height: 1.5; margin-bottom: 14px; }
+        .modal-field { margin-bottom: 12px; }
+        .modal-field label { display: block; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: #888; letter-spacing: 0.4px; margin-bottom: 4px; }
+        .modal-field select {
+            width: 100%; padding: 10px; border-radius: 8px;
+            border: 1.5px solid #e5e7eb; font-size: 0.9rem;
+            background: #fff; color: #333; -webkit-appearance: auto;
+        }
+        .modal-field .location-text { font-size: 0.85rem; color: #333; font-weight: 500; }
+        .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+        .modal-actions button {
+            flex: 1; padding: 11px; border-radius: 8px; font-weight: 600;
+            font-size: 0.85rem; cursor: pointer; min-height: 44px; border: 1.5px solid #e5e7eb;
+            background: #fff; color: #555;
+        }
+        .modal-actions button:active { background: #f3f4f6; }
+        .modal-actions .modal-confirm { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+        .modal-actions .modal-confirm:active { background: #2563eb; }
+        .modal-actions .modal-confirm:disabled { background: #93c5fd; border-color: #93c5fd; cursor: default; }
+
         .hidden { display: none !important; }
     </style>
 </head>
@@ -224,6 +269,25 @@
         <div class="telemetry-grid" id="telemetry-grid"></div>
         <div class="action-row" id="action-row"></div>
         <div class="track-info" id="track-info"></div>
+    </div>
+</div>
+
+<div class="modal-overlay hidden" id="dive-start-modal" onclick="if(event.target===this)hideDiveStartDialog()">
+    <div class="modal-card">
+        <h2>Log Dive Start</h2>
+        <p>Record your current GPS location as the dive deployment point for a vehicle. This marker will be visible to all users on the map.</p>
+        <div class="modal-field">
+            <label>Vehicle</label>
+            <select id="dive-start-device"></select>
+        </div>
+        <div class="modal-field">
+            <label>Your Location</label>
+            <div class="location-text" id="dive-start-location">Waiting for GPS...</div>
+        </div>
+        <div class="modal-actions">
+            <button onclick="hideDiveStartDialog()">Cancel</button>
+            <button class="modal-confirm" id="dive-start-confirm" onclick="confirmDiveStart()">Log Dive Start</button>
+        </div>
     </div>
 </div>
 
@@ -279,6 +343,7 @@ function initMap() {
     }).addTo(map);
 
     initTimeFilterControl();
+    initDiveStartControl();
 
     L.control.layers(
         { 'Satellite': satelliteLayer, 'Street': streetLayer },
@@ -353,6 +418,87 @@ async function onTimeFilterChange() {
         const messages = await fetchTrack(currentImei);
         renderTrack(messages, device);
     }
+}
+
+// ── Dive Start Control + Dialog ──
+
+function initDiveStartControl() {
+    const DiveControl = L.Control.extend({
+        options: { position: 'topright' },
+        onAdd() {
+            const container = L.DomUtil.create('div', 'dive-start-control');
+            L.DomEvent.disableClickPropagation(container);
+            container.innerHTML = `<button onclick="showDiveStartDialog()">
+                <svg viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
+                Log Dive Start
+            </button>`;
+            return container;
+        }
+    });
+    new DiveControl().addTo(map);
+}
+
+function showDiveStartDialog() {
+    const modal = document.getElementById('dive-start-modal');
+    const select = document.getElementById('dive-start-device');
+    const locEl = document.getElementById('dive-start-location');
+    const confirmBtn = document.getElementById('dive-start-confirm');
+
+    select.innerHTML = devicesData.map(d =>
+        `<option value="${d.imei}">${d.name}</option>`
+    ).join('');
+
+    if (userLatLng) {
+        locEl.textContent = `${userLatLng.lat.toFixed(6)}, ${userLatLng.lng.toFixed(6)}`;
+        confirmBtn.disabled = false;
+    } else {
+        locEl.textContent = 'Waiting for GPS...';
+        confirmBtn.disabled = true;
+    }
+
+    modal.classList.remove('hidden');
+}
+
+function hideDiveStartDialog() {
+    document.getElementById('dive-start-modal').classList.add('hidden');
+}
+
+async function confirmDiveStart() {
+    const select = document.getElementById('dive-start-device');
+    const imei = select.value;
+    const name = select.options[select.selectedIndex].text;
+    const confirmBtn = document.getElementById('dive-start-confirm');
+
+    if (!userLatLng) {
+        alert('Location not available. Please enable location services.');
+        return;
+    }
+
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Saving...';
+
+    try {
+        const resp = await fetch('/api/dive-starts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_imei: imei, latitude: userLatLng.lat, longitude: userLatLng.lng }),
+        });
+        if (resp.ok) {
+            hideDiveStartDialog();
+            if (currentImei === imei) {
+                const device = devicesData.find(d => d.imei === imei);
+                const messages = await fetchTrack(imei);
+                renderTrack(messages, device);
+            }
+        } else {
+            alert('Failed to save dive start. Please try again.');
+        }
+    } catch (e) {
+        alert('Network error. Please try again.');
+    }
+
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Log Dive Start';
 }
 
 // ── Geolocation ──
@@ -522,13 +668,15 @@ function makeMarkerIcon(color, label, isLive) {
     const liveClass = isLive ? ' marker-live' : '';
     return L.divIcon({
         className: '',
-        html: `<div class="${liveClass}" style="
-            background:${color}; color:#fff; font-weight:600; font-size:11px;
-            padding:4px 8px; border-radius:12px; white-space:nowrap;
-            box-shadow:0 2px 6px rgba(0,0,0,0.3); border:2px solid #fff;
-            text-align:center; line-height:1.3;
-            transform:translate(-50%,-50%);
-        ">${label}</div>`,
+        html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%);">
+            <div class="${liveClass}" style="
+                background:${color}; color:#fff; font-weight:600; font-size:11px;
+                padding:4px 8px; border-radius:12px; white-space:nowrap;
+                box-shadow:0 2px 6px rgba(0,0,0,0.3); border:2px solid #fff;
+                text-align:center; line-height:1.3;
+            ">${label}</div>
+            <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid ${color};margin-top:-1px;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.2));"></div>
+        </div>`,
         iconSize: [0, 0],
         iconAnchor: [0, 0],
     });
@@ -749,12 +897,15 @@ async function renderTrack(messages, device) {
         const color = isLatestMsg ? latestColor : `rgba(100, 100, 180, ${0.4 + 0.6 * pct})`;
 
         if (isLatestMsg) {
-            L.marker([m.latitude, m.longitude], { icon: makeMarkerIcon(color, name, isLive) }).addTo(markersLayer);
+            const mk = L.marker([m.latitude, m.longitude], { icon: makeMarkerIcon(color, name, isLive) });
+            mk.on('click', e => { L.DomEvent.stopPropagation(e); });
+            mk.addTo(markersLayer);
         } else {
             const ts = m.created_at ? utc(m.created_at).format('MMM D, h:mm A') : '';
-            L.marker([m.latitude, m.longitude], { icon: makeTrackPointIcon(color) })
-                .bindPopup(`<b>#${i + 1}</b><br>${m.latitude.toFixed(6)}, ${m.longitude.toFixed(6)}<br>${m.battery_voltage != null ? m.battery_voltage.toFixed(2) + 'V' : ''} · ${m.max_depth != null ? m.max_depth.toFixed(1) + 'm' : ''}<br>${ts}`)
-                .addTo(markersLayer);
+            const mk = L.marker([m.latitude, m.longitude], { icon: makeTrackPointIcon(color) })
+                .bindPopup(`<b>#${i + 1}</b><br>${m.latitude.toFixed(6)}, ${m.longitude.toFixed(6)}<br>${m.battery_voltage != null ? m.battery_voltage.toFixed(2) + 'V' : ''} · ${m.max_depth != null ? m.max_depth.toFixed(1) + 'm' : ''}<br>${ts}`);
+            mk.on('click', e => { L.DomEvent.stopPropagation(e); });
+            mk.addTo(markersLayer);
         }
     });
 
@@ -797,10 +948,10 @@ async function renderTrack(messages, device) {
         `${messages.length} messages · ${dives.length} dive${dives.length !== 1 ? 's' : ''}`;
 
     updateStaleBanner(latest.created_at);
-    renderActions(latest, name, imei);
+    renderActions(latest, name);
 }
 
-function renderActions(latest, deviceName, imei) {
+function renderActions(latest, deviceName) {
     const lat = latest.latitude.toFixed(6);
     const lon = latest.longitude.toFixed(6);
     const coordStr = `${lat}, ${lon}`;
@@ -819,40 +970,7 @@ function renderActions(latest, deviceName, imei) {
             <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
             <span>Maps</span>
         </button>
-        <button class="dive-btn" onclick="logDiveStart('${imei}', this)">
-            <svg viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
-            <span>Log Dive</span>
-        </button>
     `;
-}
-
-async function logDiveStart(imei, btn) {
-    if (!userLatLng) {
-        alert('Location not available. Please enable location services.');
-        return;
-    }
-    const span = btn.querySelector('span');
-    span.textContent = 'Saving...';
-    try {
-        const resp = await fetch('/api/dive-starts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device_imei: imei, latitude: userLatLng.lat, longitude: userLatLng.lng }),
-        });
-        if (resp.ok) {
-            span.textContent = 'Logged!';
-            setTimeout(() => { span.textContent = 'Log Dive'; }, 2000);
-            const device = devicesData.find(d => d.imei === imei);
-            const messages = await fetchTrack(imei);
-            renderTrack(messages, device);
-        } else {
-            span.textContent = 'Error';
-            setTimeout(() => { span.textContent = 'Log Dive'; }, 2000);
-        }
-    } catch (e) {
-        span.textContent = 'Error';
-        setTimeout(() => { span.textContent = 'Log Dive'; }, 2000);
-    }
 }
 
 async function copyCoords(text, btn) {
