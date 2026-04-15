@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 
 
 class DorisMessageBase(BaseModel):
@@ -27,6 +27,12 @@ class DorisMessageResponse(DorisMessageBase):
 
     model_config = {"from_attributes": True}
 
+    @field_serializer("created_at")
+    def serialize_created_at(self, v: Optional[datetime], _info) -> Optional[str]:
+        if v is None:
+            return None
+        return v.strftime("%Y-%m-%dT%H:%M:%SZ")
+
 
 class DeviceInfo(BaseModel):
     imei: str
@@ -37,3 +43,25 @@ class DeviceStatus(BaseModel):
     imei: str
     name: str
     latest_message: Optional[DorisMessageResponse] = None
+
+
+class DiveStartCreate(BaseModel):
+    device_imei: str
+    latitude: float
+    longitude: float
+
+
+class DiveStartResponse(BaseModel):
+    id: int
+    device_imei: str
+    latitude: float
+    longitude: float
+    created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, v: Optional[datetime], _info) -> Optional[str]:
+        if v is None:
+            return None
+        return v.strftime("%Y-%m-%dT%H:%M:%SZ")

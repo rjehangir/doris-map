@@ -22,6 +22,8 @@
         }
         .top-bar h1 { font-size: 1rem; font-weight: 600; margin: 0; }
         .top-bar .subtitle { font-size: 0.72rem; opacity: 0.7; }
+        .top-bar .subtitle a { color: #93c5fd; text-decoration: none; opacity: 1; }
+        .top-bar .subtitle a:active { text-decoration: underline; }
         .top-bar button {
             background: rgba(255,255,255,0.15); border: none; color: #fff;
             padding: 8px 14px; border-radius: 6px; cursor: pointer;
@@ -99,16 +101,18 @@
         .track-info { padding: 2px 14px 10px; font-size: 0.75rem; color: #666; }
 
         /* Action row in detail bar */
-        .action-row { display: flex; gap: 8px; padding: 0 10px 10px; }
+        .action-row { display: flex; gap: 8px; padding: 0 10px 10px; flex-wrap: wrap; }
         .action-row button {
             flex: 1; padding: 10px; border-radius: 8px; font-weight: 600;
             font-size: 0.82rem; cursor: pointer; min-height: 44px;
             border: 1.5px solid #e5e7eb; background: #fff; color: #333;
             display: flex; align-items: center; justify-content: center; gap: 6px;
-            transition: background 0.15s;
+            transition: background 0.15s; min-width: 0;
         }
         .action-row button:active { background: #f3f4f6; }
         .action-row button svg { width: 16px; height: 16px; fill: currentColor; flex-shrink: 0; }
+        .action-row button.dive-btn { border-color: #3b82f6; color: #3b82f6; }
+        .action-row button.dive-btn:active { background: #eff6ff; }
 
         /* Locate me button */
         .locate-btn {
@@ -146,6 +150,16 @@
             transition: transform 0.3s ease;
         }
 
+        /* Live pulsing glow for recent markers */
+        @keyframes live-glow {
+            0%, 100% { box-shadow: 0 0 4px 2px rgba(34,197,94,0.5); }
+            50% { box-shadow: 0 0 12px 6px rgba(34,197,94,0.8); }
+        }
+        .marker-live {
+            animation: live-glow 1.5s ease-in-out infinite;
+            border-radius: 12px;
+        }
+
         /* Distance line tooltip */
         .distance-tooltip {
             background: rgba(30,30,60,0.88) !important; color: #fff !important;
@@ -163,6 +177,20 @@
         }
         .stale-banner.warn { display: block; background: #fef3c7; color: #92400e; }
         .stale-banner.danger { display: block; background: #fee2e2; color: #991b1b; }
+
+        /* Time filter control */
+        .time-filter-control {
+            background: rgba(255,255,255,0.95); border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2); padding: 4px;
+            display: flex; flex-wrap: wrap; gap: 2px;
+        }
+        .time-filter-control button {
+            background: none; border: none; cursor: pointer;
+            padding: 4px 7px; border-radius: 5px; font-size: 0.68rem;
+            font-weight: 600; color: #555; white-space: nowrap;
+        }
+        .time-filter-control button:hover { background: #e5e7eb; }
+        .time-filter-control button.active { background: #3b82f6; color: #fff; }
 
         .hidden { display: none !important; }
     </style>
@@ -202,6 +230,9 @@
 <script>
 const LOW_VOLTAGE_THRESHOLD = 12.0;
 const POLL_INTERVAL_MS = 30000;
+const LIVE_MINUTES = 10;
+const STALE_MINUTES = 60;
+const DIVE_GAP_MINUTES = 30;
 
 let map, markersLayer, trackLayer, lineLayer;
 let currentImei = null;
@@ -209,25 +240,48 @@ let devicesData = [];
 let userLatLng = null;
 let userHeading = null;
 let userMarker = null;
+let hasSavedView = false;
+let timeFilterHours = null;
+
+function utc(ts) { return moment.utc(ts).local(); }
+
+function ageMinutes(ts) {
+    if (!ts) return Infinity;
+    return moment().diff(utc(ts), 'minutes');
+}
 
 // ── Map ──
 
 function initMap() {
-    map = L.map('map', { zoomControl: false }).setView([21.3, -157.8], 10);
+    const saved = localStorage.getItem('mapView');
+    let initCenter = [21.3, -157.8];
+    let initZoom = 10;
+    if (saved) {
+        try {
+            const v = JSON.parse(saved);
+            initCenter = [v.lat, v.lng];
+            initZoom = v.zoom;
+            hasSavedView = true;
+        } catch (e) {}
+    }
+
+    map = L.map('map', { zoomControl: false }).setView(initCenter, initZoom);
     L.control.zoom({ position: 'topleft' }).addTo(map);
 
     const streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; OSM &copy; CARTO',
         maxZoom: 20,
-    }).addTo(map);
+    });
 
     const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: '&copy; Esri',
         maxZoom: 19,
-    });
+    }).addTo(map);
+
+    initTimeFilterControl();
 
     L.control.layers(
-        { 'Street': streetLayer, 'Satellite': satelliteLayer },
+        { 'Satellite': satelliteLayer, 'Street': streetLayer },
         null,
         { position: 'topright' }
     ).addTo(map);
@@ -237,6 +291,68 @@ function initMap() {
     lineLayer = L.layerGroup().addTo(map);
 
     map.on('click', () => dismissDetail());
+    map.on('moveend', saveMapView);
+}
+
+function saveMapView() {
+    const c = map.getCenter();
+    localStorage.setItem('mapView', JSON.stringify({ lat: c.lat, lng: c.lng, zoom: map.getZoom() }));
+}
+
+// ── Time Filter ──
+
+const TIME_PRESETS = [
+    { label: '30m', hours: 0.5 },
+    { label: '1h', hours: 1 },
+    { label: '6h', hours: 6 },
+    { label: '24h', hours: 24 },
+    { label: '1w', hours: 168 },
+    { label: '1y', hours: 8760 },
+    { label: 'All', hours: null },
+];
+
+function initTimeFilterControl() {
+    const FilterControl = L.Control.extend({
+        options: { position: 'topright' },
+        onAdd() {
+            const container = L.DomUtil.create('div', 'time-filter-control');
+            L.DomEvent.disableClickPropagation(container);
+            TIME_PRESETS.forEach(p => {
+                const btn = L.DomUtil.create('button', p.hours === null ? 'active' : '', container);
+                btn.textContent = p.label;
+                btn.addEventListener('click', () => {
+                    container.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    timeFilterHours = p.hours;
+                    onTimeFilterChange();
+                });
+            });
+            return container;
+        }
+    });
+    new FilterControl().addTo(map);
+}
+
+function getTimeSinceParam() {
+    if (timeFilterHours === null) return '';
+    const since = moment().subtract(timeFilterHours, 'hours').utc().format('YYYY-MM-DDTHH:mm:ss') + 'Z';
+    return `&since=${since}`;
+}
+
+function isWithinTimeFilter(createdAt) {
+    if (timeFilterHours === null) return true;
+    if (!createdAt) return false;
+    return ageMinutes(createdAt) <= timeFilterHours * 60;
+}
+
+async function onTimeFilterChange() {
+    if (!currentImei) {
+        renderOverview(devicesData);
+    } else {
+        const device = devicesData.find(d => d.imei === currentImei);
+        const messages = await fetchTrack(currentImei);
+        renderTrack(messages, device);
+    }
 }
 
 // ── Geolocation ──
@@ -381,25 +497,32 @@ function distanceFromUser(lat, lon) {
 
 // ── Markers ──
 
+function markerColorForAge(device) {
+    const msg = device.latest_message || (device.created_at ? device : null);
+    const ts = msg ? (msg.created_at || null) : null;
+    const age = ageMinutes(ts);
+
+    if (age > STALE_MINUTES) return '#9ca3af';
+    if (!device.latest_message) return '#9ca3af';
+    if (device.latest_message.leak_detected) return '#ef4444';
+    if (device.latest_message.battery_voltage != null && device.latest_message.battery_voltage < LOW_VOLTAGE_THRESHOLD) return '#f59e0b';
+    return '#22c55e';
+}
+
 function getStatusClass(device) {
     if (!device.latest_message) return 'status-gray';
+    const age = ageMinutes(device.latest_message.created_at);
+    if (age > STALE_MINUTES) return 'status-gray';
     if (device.latest_message.leak_detected) return 'status-red';
-    if (device.latest_message.battery_voltage < LOW_VOLTAGE_THRESHOLD) return 'status-amber';
+    if (device.latest_message.battery_voltage != null && device.latest_message.battery_voltage < LOW_VOLTAGE_THRESHOLD) return 'status-amber';
     return 'status-green';
 }
 
-function getStatusColor(device) {
-    const cls = getStatusClass(device);
-    if (cls === 'status-red') return '#ef4444';
-    if (cls === 'status-amber') return '#f59e0b';
-    if (cls === 'status-green') return '#22c55e';
-    return '#9ca3af';
-}
-
-function makeMarkerIcon(color, label) {
+function makeMarkerIcon(color, label, isLive) {
+    const liveClass = isLive ? ' marker-live' : '';
     return L.divIcon({
         className: '',
-        html: `<div style="
+        html: `<div class="${liveClass}" style="
             background:${color}; color:#fff; font-weight:600; font-size:11px;
             padding:4px 8px; border-radius:12px; white-space:nowrap;
             box-shadow:0 2px 6px rgba(0,0,0,0.3); border:2px solid #fff;
@@ -423,6 +546,37 @@ function makeTrackPointIcon(color) {
     });
 }
 
+function makeDiveStartIcon() {
+    return L.divIcon({
+        className: '',
+        html: `<div style="
+            width:14px; height:14px; background:#8b5cf6; border:2px solid #fff;
+            box-shadow:0 2px 6px rgba(0,0,0,0.3);
+            transform:translate(-50%,-50%) rotate(45deg);
+        "></div>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+    });
+}
+
+// ── Dive Segmentation ──
+
+function segmentDives(messages) {
+    const dives = [];
+    let current = null;
+    for (const m of messages) {
+        const t = moment.utc(m.created_at);
+        if (!current || t.diff(current.end, 'minutes') >= DIVE_GAP_MINUTES) {
+            current = { id: t.format('YYYYMMDDHHmm'), messages: [m], end: t };
+            dives.push(current);
+        } else {
+            current.messages.push(m);
+            current.end = t;
+        }
+    }
+    return dives;
+}
+
 // ── API ──
 
 async function fetchDevices() {
@@ -438,10 +592,22 @@ async function fetchDevices() {
 
 async function fetchTrack(imei) {
     try {
-        const resp = await fetch(`/api/devices/${imei}/messages?limit=10000`);
+        let url = `/api/devices/${imei}/messages?limit=10000`;
+        url += getTimeSinceParam();
+        const resp = await fetch(url);
         return await resp.json();
     } catch (e) {
         console.error('Failed to fetch track:', e);
+        return [];
+    }
+}
+
+async function fetchDiveStarts(imei) {
+    try {
+        const resp = await fetch(`/api/dive-starts/${imei}`);
+        return await resp.json();
+    } catch (e) {
+        console.error('Failed to fetch dive starts:', e);
         return [];
     }
 }
@@ -454,16 +620,19 @@ function renderOverview(devices) {
     clearDistanceLine();
 
     const onlineCount = devices.filter(d => d.latest_message).length;
-    document.getElementById('last-update').textContent =
-        `${onlineCount} unit${onlineCount !== 1 ? 's' : ''} · Updated ${moment().format('h:mm A')}`;
+    updateTimestamp(onlineCount);
 
     const bounds = [];
     devices.forEach(d => {
         if (!d.latest_message) return;
+        if (!isWithinTimeFilter(d.latest_message.created_at)) return;
+
         const lat = d.latest_message.latitude;
         const lon = d.latest_message.longitude;
-        const color = getStatusColor(d);
-        const marker = L.marker([lat, lon], { icon: makeMarkerIcon(color, d.name) });
+        const color = markerColorForAge(d);
+        const age = ageMinutes(d.latest_message.created_at);
+        const isLive = age <= LIVE_MINUTES;
+        const marker = L.marker([lat, lon], { icon: makeMarkerIcon(color, d.name, isLive) });
         marker.on('click', e => {
             L.DomEvent.stopPropagation(e);
             onMarkerClick(d);
@@ -473,7 +642,8 @@ function renderOverview(devices) {
     });
 
     if (userLatLng) bounds.push([userLatLng.lat, userLatLng.lng]);
-    if (bounds.length) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+    if (bounds.length && !hasSavedView) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+    hasSavedView = false;
 
     updateStaleBannerForOverview(devices);
 }
@@ -519,8 +689,8 @@ async function showDetail(imei) {
     const msg = device ? device.latest_message : null;
 
     const statusCls = getStatusClass(device || {});
-    const timeAgo = msg && msg.created_at ? moment(msg.created_at).fromNow() : '--';
-    const voltage = msg ? msg.battery_voltage.toFixed(1) + 'V' : '--';
+    const timeAgo = msg && msg.created_at ? utc(msg.created_at).fromNow() : '--';
+    const voltage = msg && msg.battery_voltage != null ? msg.battery_voltage.toFixed(1) + 'V' : '--';
     const dist = msg ? distanceFromUser(msg.latitude, msg.longitude) : '';
     const distSpan = dist ? `<span>${dist}</span>` : '';
     const leak = msg && msg.leak_detected ? '<span style="color:#ef4444;font-weight:600;">LEAK</span>' : '';
@@ -539,61 +709,82 @@ async function showDetail(imei) {
     updateTimestamp();
 }
 
-function renderTrack(messages, device) {
+async function renderTrack(messages, device) {
     markersLayer.clearLayers();
     trackLayer.clearLayers();
 
     const name = device ? device.name : '?';
+    const imei = device ? device.imei : null;
 
     if (!messages.length) {
         document.getElementById('telemetry-grid').innerHTML =
             '<div class="telemetry-item" style="grid-column:1/-1;"><div class="value">No messages</div></div>';
         document.getElementById('track-info').textContent = '';
+        document.getElementById('action-row').innerHTML = '';
         return;
     }
 
-    const coords = messages.map(m => [m.latitude, m.longitude]);
+    const dives = segmentDives(messages);
 
-    for (let i = 0; i < coords.length - 1; i++) {
-        const pct = i / Math.max(coords.length - 1, 1);
-        const r = Math.round(100 + 55 * (1 - pct));
-        const g = Math.round(100 + 55 * pct);
-        L.polyline([coords[i], coords[i + 1]], {
-            color: `rgb(${r}, ${g}, 180)`, weight: 3, opacity: 0.8
-        }).addTo(trackLayer);
-    }
+    dives.forEach((dive, di) => {
+        const coords = dive.messages.map(m => [m.latitude, m.longitude]);
+        for (let i = 0; i < coords.length - 1; i++) {
+            const pct = i / Math.max(coords.length - 1, 1);
+            const r = Math.round(100 + 55 * (1 - pct));
+            const g = Math.round(100 + 55 * pct);
+            L.polyline([coords[i], coords[i + 1]], {
+                color: `rgb(${r}, ${g}, 180)`, weight: 3, opacity: 0.8
+            }).addTo(trackLayer);
+        }
+    });
+
+    const latest = messages[messages.length - 1];
+    const latestAge = ageMinutes(latest.created_at);
+    const latestColor = latestAge > STALE_MINUTES ? '#9ca3af' : markerColorForAge(device || {});
+    const isLive = latestAge <= LIVE_MINUTES;
 
     messages.forEach((m, i) => {
         const pct = i / Math.max(messages.length - 1, 1);
-        const isLatest = i === messages.length - 1;
-        const color = isLatest ? getStatusColor(device || {}) : `rgba(100, 100, 180, ${0.4 + 0.6 * pct})`;
+        const isLatestMsg = i === messages.length - 1;
+        const color = isLatestMsg ? latestColor : `rgba(100, 100, 180, ${0.4 + 0.6 * pct})`;
 
-        if (isLatest) {
-            L.marker([m.latitude, m.longitude], { icon: makeMarkerIcon(color, name) }).addTo(markersLayer);
+        if (isLatestMsg) {
+            L.marker([m.latitude, m.longitude], { icon: makeMarkerIcon(color, name, isLive) }).addTo(markersLayer);
         } else {
+            const ts = m.created_at ? utc(m.created_at).format('MMM D, h:mm A') : '';
             L.marker([m.latitude, m.longitude], { icon: makeTrackPointIcon(color) })
-                .bindPopup(`<b>#${i + 1}</b><br>${m.latitude.toFixed(6)}, ${m.longitude.toFixed(6)}<br>${m.battery_voltage.toFixed(2)}V · ${m.max_depth.toFixed(1)}m<br>${m.transmit_time}`)
+                .bindPopup(`<b>#${i + 1}</b><br>${m.latitude.toFixed(6)}, ${m.longitude.toFixed(6)}<br>${m.battery_voltage != null ? m.battery_voltage.toFixed(2) + 'V' : ''} · ${m.max_depth != null ? m.max_depth.toFixed(1) + 'm' : ''}<br>${ts}`)
                 .addTo(markersLayer);
         }
     });
 
-    const fitBounds = [...coords];
+    if (imei) {
+        try {
+            const starts = await fetchDiveStarts(imei);
+            starts.forEach(s => {
+                const m = L.marker([s.latitude, s.longitude], { icon: makeDiveStartIcon(), zIndexOffset: 500 });
+                m.bindPopup(`<b>Dive Start</b><br>${s.created_at ? utc(s.created_at).format('MMM D, h:mm A') : ''}`);
+                markersLayer.addLayer(m);
+            });
+        } catch (e) {}
+    }
+
+    const fitBounds = messages.map(m => [m.latitude, m.longitude]);
     if (userLatLng) fitBounds.push([userLatLng.lat, userLatLng.lng]);
     map.fitBounds(fitBounds, { padding: [50, 50], maxZoom: 16 });
 
-    const latest = messages[messages.length - 1];
     const dist = distanceFromUser(latest.latitude, latest.longitude);
 
     const items = [
         { label: 'Position', value: `${latest.latitude.toFixed(5)}, ${latest.longitude.toFixed(5)}`, unit: '' },
-        { label: 'Altitude', value: latest.altitude.toFixed(1), unit: 'm' },
-        { label: 'Satellites', value: latest.satellite_count, unit: '' },
-        { label: 'Battery', value: latest.battery_voltage.toFixed(2), unit: 'V' },
-        { label: 'Max Depth', value: latest.max_depth.toFixed(1), unit: 'm' },
+        { label: 'Satellites', value: latest.satellite_count != null ? latest.satellite_count : '--', unit: '' },
+        { label: 'Battery', value: latest.battery_voltage != null ? latest.battery_voltage.toFixed(2) : '--', unit: 'V' },
+        { label: 'Max Depth', value: latest.max_depth != null ? latest.max_depth.toFixed(1) : '--', unit: 'm' },
         { label: 'Leak', value: latest.leak_detected ? 'YES' : 'No', unit: '' },
     ];
     if (dist) items.push({ label: 'Distance', value: dist, unit: '' });
-    items.push({ label: 'Updated', value: latest.created_at ? moment(latest.created_at).fromNow() : '--', unit: '' });
+    items.push({ label: 'Received', value: latest.created_at ? utc(latest.created_at).format('MMM D, h:mm A') : '--', unit: '' });
+    items.push({ label: 'Ago', value: latest.created_at ? utc(latest.created_at).fromNow() : '--', unit: '' });
 
     document.getElementById('telemetry-grid').innerHTML = items.map(t =>
         `<div class="telemetry-item">
@@ -602,13 +793,14 @@ function renderTrack(messages, device) {
         </div>`
     ).join('');
 
-    document.getElementById('track-info').textContent = `${messages.length} messages tracked`;
+    document.getElementById('track-info').textContent =
+        `${messages.length} messages · ${dives.length} dive${dives.length !== 1 ? 's' : ''}`;
 
     updateStaleBanner(latest.created_at);
-    renderActions(latest, name);
+    renderActions(latest, name, imei);
 }
 
-function renderActions(latest, deviceName) {
+function renderActions(latest, deviceName, imei) {
     const lat = latest.latitude.toFixed(6);
     const lon = latest.longitude.toFixed(6);
     const coordStr = `${lat}, ${lon}`;
@@ -621,13 +813,46 @@ function renderActions(latest, deviceName) {
     document.getElementById('action-row').innerHTML = `
         <button onclick="copyCoords('${coordStr}', this)">
             <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-            <span>Copy Coords</span>
+            <span>Copy</span>
         </button>
         <button onclick="window.open('${mapsUrl}', '_blank')">
             <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-            <span>Open in Maps</span>
+            <span>Maps</span>
+        </button>
+        <button class="dive-btn" onclick="logDiveStart('${imei}', this)">
+            <svg viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
+            <span>Log Dive</span>
         </button>
     `;
+}
+
+async function logDiveStart(imei, btn) {
+    if (!userLatLng) {
+        alert('Location not available. Please enable location services.');
+        return;
+    }
+    const span = btn.querySelector('span');
+    span.textContent = 'Saving...';
+    try {
+        const resp = await fetch('/api/dive-starts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_imei: imei, latitude: userLatLng.lat, longitude: userLatLng.lng }),
+        });
+        if (resp.ok) {
+            span.textContent = 'Logged!';
+            setTimeout(() => { span.textContent = 'Log Dive'; }, 2000);
+            const device = devicesData.find(d => d.imei === imei);
+            const messages = await fetchTrack(imei);
+            renderTrack(messages, device);
+        } else {
+            span.textContent = 'Error';
+            setTimeout(() => { span.textContent = 'Log Dive'; }, 2000);
+        }
+    } catch (e) {
+        span.textContent = 'Error';
+        setTimeout(() => { span.textContent = 'Log Dive'; }, 2000);
+    }
 }
 
 async function copyCoords(text, btn) {
@@ -644,7 +869,7 @@ async function copyCoords(text, btn) {
         document.execCommand('copy');
         document.body.removeChild(ta);
         btn.querySelector('span').textContent = 'Copied!';
-        setTimeout(() => { btn.querySelector('span').textContent = 'Copy Coords'; }, 1500);
+        setTimeout(() => { btn.querySelector('span').textContent = 'Copy'; }, 1500);
     }
 }
 
@@ -701,13 +926,13 @@ function updateStaleBanner(createdAt) {
         banner.className = 'stale-banner';
         return;
     }
-    const ageMin = moment().diff(moment(createdAt), 'minutes');
-    if (ageMin >= STALE_DANGER_MINUTES) {
+    const age = ageMinutes(createdAt);
+    if (age >= STALE_DANGER_MINUTES) {
         banner.className = 'stale-banner danger';
-        banner.textContent = `Last report ${moment(createdAt).fromNow()} \u2014 position unreliable`;
-    } else if (ageMin >= STALE_WARN_MINUTES) {
+        banner.textContent = `Last report ${utc(createdAt).fromNow()} \u2014 position unreliable`;
+    } else if (age >= STALE_WARN_MINUTES) {
         banner.className = 'stale-banner warn';
-        banner.textContent = `Last report ${moment(createdAt).fromNow()} \u2014 position may have drifted`;
+        banner.textContent = `Last report ${utc(createdAt).fromNow()} \u2014 position may have drifted`;
     } else {
         banner.className = 'stale-banner';
     }
@@ -717,17 +942,20 @@ function updateStaleBannerForOverview(devices) {
     const withMessages = devices.filter(d => d.latest_message && d.latest_message.created_at);
     if (!withMessages.length) { updateStaleBanner(null); return; }
     const oldest = withMessages.reduce((a, b) =>
-        moment(a.latest_message.created_at).isBefore(moment(b.latest_message.created_at)) ? a : b
+        moment.utc(a.latest_message.created_at).isBefore(moment.utc(b.latest_message.created_at)) ? a : b
     );
     updateStaleBanner(oldest.latest_message.created_at);
 }
 
 // ── Polling ──
 
-function updateTimestamp() {
-    const onlineCount = devicesData.filter(d => d.latest_message).length;
-    document.getElementById('last-update').textContent =
-        `${onlineCount} unit${onlineCount !== 1 ? 's' : ''} · Updated ${moment().format('h:mm A')}`;
+function updateTimestamp(count) {
+    if (count === undefined) {
+        count = devicesData.filter(d => d.latest_message).length;
+    }
+    document.getElementById('last-update').innerHTML =
+        `${count} unit${count !== 1 ? 's' : ''} · Updated ${moment().format('h:mm A')} `
+        + `<a href="#" onclick="poll();return false">(Update now)</a>`;
 }
 
 async function poll() {

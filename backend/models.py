@@ -24,3 +24,13 @@ class DorisMessage(Base):
     max_depth = Column(Float)
     raw_data = Column(String)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class DiveStart(Base):
+    __tablename__ = "dive_starts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_imei = Column(String, index=True)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

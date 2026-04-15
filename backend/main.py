@@ -1,7 +1,8 @@
 #! /usr/bin/env python3
 
 import json
-from typing import Any, List
+from datetime import datetime
+from typing import Any, List, Optional
 
 import uvicorn
 from fastapi import Depends, FastAPI, Form, Request
@@ -14,13 +15,15 @@ from starlette.responses import Response as StarletteResponse
 import models
 from config import get_device_name, get_devices, load_devices
 from crud import (
+    create_dive_start,
     create_doris_message,
     get_device_messages,
+    get_dive_starts,
     get_latest_message_per_device,
     get_recent_messages,
 )
 from database import SessionLocal, engine
-from schemas import DeviceStatus, DorisMessageResponse
+from schemas import DiveStartCreate, DiveStartResponse, DorisMessageResponse
 
 
 class PrettyJSONResponse(StarletteResponse):
@@ -62,6 +65,12 @@ def serialize_message(orm_obj) -> dict | None:
     if orm_obj is None:
         return None
     return DorisMessageResponse.model_validate(orm_obj).model_dump(mode="json")
+
+
+def serialize_dive_start(orm_obj) -> dict | None:
+    if orm_obj is None:
+        return None
+    return DiveStartResponse.model_validate(orm_obj).model_dump(mode="json")
 
 
 @app.get("/")
@@ -122,10 +131,20 @@ async def list_devices(db: Session = Depends(get_db)):
 
 @app.get("/api/devices/{imei}/messages")
 async def device_messages(
-    imei: str, skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)
+    imei: str,
+    skip: int = 0,
+    limit: int = 10000,
+    since: Optional[str] = None,
+    db: Session = Depends(get_db),
 ):
-    """Get message history for a single device."""
-    messages = get_device_messages(db, imei, skip, limit)
+    """Get message history for a single device, optionally filtered by time."""
+    since_dt = None
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+    messages = get_device_messages(db, imei, skip, limit, since=since_dt)
     return [serialize_message(m) for m in messages]
 
 
@@ -134,6 +153,23 @@ async def recent_messages(hours: int = 24, db: Session = Depends(get_db)):
     """Get all messages from all devices within a time window."""
     messages = get_recent_messages(db, hours)
     return [serialize_message(m) for m in messages]
+
+
+# ── Dive Starts ──
+
+
+@app.post("/api/dive-starts")
+async def log_dive_start(body: DiveStartCreate, db: Session = Depends(get_db)):
+    """Log a dive start location for a device."""
+    obj = create_dive_start(db, body)
+    return serialize_dive_start(obj)
+
+
+@app.get("/api/dive-starts/{imei}")
+async def list_dive_starts(imei: str, db: Session = Depends(get_db)):
+    """Get all dive start markers for a device."""
+    starts = get_dive_starts(db, imei)
+    return [serialize_dive_start(s) for s in starts]
 
 
 if __name__ == "__main__":

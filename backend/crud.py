@@ -1,4 +1,5 @@
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 from loguru import logger
 from sqlalchemy.orm import Session
@@ -77,15 +78,19 @@ def get_latest_message_per_device(db: Session, imei: str):
     )
 
 
-def get_device_messages(db: Session, imei: str, skip: int = 0, limit: int = 1000):
-    return (
-        db.query(models.DorisMessage)
-        .filter(models.DorisMessage.device_imei == imei)
-        .order_by(models.DorisMessage.id.asc())
-        .offset(skip)
-        .limit(limit)
-        .all()
+def get_device_messages(
+    db: Session,
+    imei: str,
+    skip: int = 0,
+    limit: int = 10000,
+    since: Optional[datetime] = None,
+):
+    q = db.query(models.DorisMessage).filter(
+        models.DorisMessage.device_imei == imei
     )
+    if since is not None:
+        q = q.filter(models.DorisMessage.created_at >= since)
+    return q.order_by(models.DorisMessage.id.asc()).offset(skip).limit(limit).all()
 
 
 def get_recent_messages(db: Session, hours: int = 24):
@@ -94,5 +99,35 @@ def get_recent_messages(db: Session, hours: int = 24):
         db.query(models.DorisMessage)
         .filter(models.DorisMessage.created_at >= cutoff)
         .order_by(models.DorisMessage.id.desc())
+        .all()
+    )
+
+
+# ── Dive Starts ──
+
+
+def create_dive_start(
+    db: Session, data: schemas.DiveStartCreate
+) -> models.DiveStart:
+    obj = models.DiveStart(
+        device_imei=data.device_imei,
+        latitude=data.latitude,
+        longitude=data.longitude,
+    )
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    logger.info(
+        f"Dive start id={obj.id} logged for IMEI {data.device_imei} "
+        f"at ({data.latitude}, {data.longitude})"
+    )
+    return obj
+
+
+def get_dive_starts(db: Session, imei: str):
+    return (
+        db.query(models.DiveStart)
+        .filter(models.DiveStart.device_imei == imei)
+        .order_by(models.DiveStart.id.desc())
         .all()
     )
