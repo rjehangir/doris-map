@@ -150,6 +150,16 @@
             transition: transform 0.3s ease;
         }
 
+        /* Selected track point pulse */
+        @keyframes selected-pulse {
+            0%, 100% { box-shadow: 0 0 4px 2px rgba(65, 185, 195, 0.5); }
+            50% { box-shadow: 0 0 10px 5px rgba(65, 185, 195, 0.9); }
+        }
+        .marker-selected {
+            animation: selected-pulse 1.2s ease-in-out infinite;
+            border-radius: 50%;
+        }
+
         /* Live pulsing glow for recent markers */
         @keyframes live-glow {
             0%, 100% { box-shadow: 0 0 4px 2px rgba(34,197,94,0.5); }
@@ -320,7 +330,7 @@ const LIVE_MINUTES = 10;
 const STALE_MINUTES = 60;
 const DIVE_GAP_MINUTES = 30;
 
-let map, markersLayer, trackLayer, lineLayer;
+let map, markersLayer, trackLayer, lineLayer, highlightLayer;
 let currentImei = null;
 let devicesData = [];
 let userLatLng = null;
@@ -329,6 +339,7 @@ let userMarker = null;
 let hasSavedView = false;
 let shouldFitBounds = true;
 let timeFilterHours = JSON.parse(localStorage.getItem('timeFilterHours'));
+let selectedPointIndex = -1;
 
 function utc(ts) { return moment.utc(ts).local(); }
 
@@ -394,6 +405,7 @@ function initMap() {
     markersLayer = L.layerGroup().addTo(map);
     trackLayer = L.layerGroup().addTo(map);
     lineLayer = L.layerGroup().addTo(map);
+    highlightLayer = L.layerGroup().addTo(map);
 
     map.on('click', onMapClick);
     map.on('moveend', saveMapView);
@@ -775,6 +787,64 @@ function makeTrackPointIcon(color) {
     });
 }
 
+function makeSelectedPointIcon() {
+    return L.divIcon({
+        className: '',
+        html: `<div class="marker-selected" style="
+            width:14px; height:14px; background:#41B9C3; border-radius:50%;
+            border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,0.4);
+        "></div>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+    });
+}
+
+function selectPoint(msg, index, messages, device) {
+    highlightLayer.clearLayers();
+    selectedPointIndex = index;
+
+    const hlMarker = L.marker([msg.latitude, msg.longitude], {
+        icon: makeSelectedPointIcon(), zIndexOffset: 900
+    });
+    hlMarker.on('click', e => { L.DomEvent.stopPropagation(e); });
+    highlightLayer.addLayer(hlMarker);
+
+    drawDistanceLine(L.latLng(msg.latitude, msg.longitude));
+
+    const name = device ? device.name : '?';
+    const isLatest = index === messages.length - 1;
+    const timeAgo = msg.created_at ? utc(msg.created_at).fromNow() : '--';
+    const dist = distanceFromUser(msg.latitude, msg.longitude);
+    const pointLabel = isLatest ? '' : `<span style="color:rgba(150,238,242,0.6);">#${index + 1}</span>`;
+
+    document.getElementById('detail-header').innerHTML = `
+        <span class="status-dot ${getStatusClass(device || {})}"></span>
+        <span class="detail-name">${name}</span>
+        ${pointLabel}
+        <span class="detail-summary">${dist ? `<span>${dist}</span>` : ''}<span>${timeAgo}</span></span>
+        <span class="detail-actions">${buildActionButtons(msg, name)}</span>
+    `;
+
+    const telem = [];
+    telem.push(`<span class="telem-item">${ICONS.pin}<span class="tv">${msg.latitude.toFixed(5)}, ${msg.longitude.toFixed(5)}</span></span>`);
+    telem.push(`<span class="telem-item">${ICONS.sat}<span class="tv">${msg.satellite_count != null ? msg.satellite_count : '--'}</span></span>`);
+
+    const batColor = msg.battery_voltage != null && msg.battery_voltage < LOW_VOLTAGE_THRESHOLD ? '#FF9937' : '#41B9C3';
+    const batVal = msg.battery_voltage != null ? msg.battery_voltage.toFixed(2) : '--';
+    telem.push(`<span class="telem-item"><svg viewBox="0 0 24 24" style="fill:${batColor}"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg><span class="tv">${batVal}</span><span class="tu">V</span></span>`);
+
+    telem.push(`<span class="telem-item">${ICONS.depth}<span class="tv">${msg.max_depth != null ? msg.max_depth.toFixed(1) : '--'}</span><span class="tu">m</span></span>`);
+
+    const leakCls = msg.leak_detected ? ' leak-yes' : '';
+    telem.push(`<span class="telem-item${leakCls}">${ICONS.leak}<span class="tv">${msg.leak_detected ? 'LEAK' : 'OK'}</span></span>`);
+
+    telem.push(`<span class="telem-item">${ICONS.clock}<span class="tv">${msg.created_at ? utc(msg.created_at).format('MMM D, h:mm A') : '--'}</span></span>`);
+
+    document.getElementById('detail-telemetry').innerHTML = telem.join('');
+
+    requestAnimationFrame(() => { locateBtn.style.bottom = (bar.offsetHeight + 12) + 'px'; });
+}
+
 function makeDiveStartIcon() {
     return L.divIcon({
         className: '',
@@ -906,10 +976,10 @@ const locateBtn = document.getElementById('locate-btn');
 let barVisible = false;
 
 const ICONS = {
-    sat: '<svg viewBox="0 0 24 24"><path d="M6 14.5l3-3 2 2 7-7-1.4-1.4L11 10.7 9 8.7l-4.4 4.4zM17.7 4.3l2 2c3.1 3.1 3.1 8.1 0 11.2l-1.4-1.4c2.3-2.3 2.3-6.1 0-8.5l-2-2 1.4-1.3zM20.5 1.5l-1.4 1.4c3.9 3.9 3.9 10.2 0 14.1l1.4 1.4c4.7-4.7 4.7-12.3 0-17z"/></svg>',
+    sat: '<svg viewBox="0 0 24 24"><path d="M19.07 4.93l-1.41 1.41A8.014 8.014 0 0 1 20 12c0 2.21-.9 4.21-2.34 5.66l1.41 1.41A9.969 9.969 0 0 0 22 12c0-2.76-1.12-5.26-2.93-7.07zM17.24 6.76l-1.41 1.41A4.007 4.007 0 0 1 17 12c0 1.1-.45 2.1-1.17 2.83l1.41 1.41A5.976 5.976 0 0 0 19 12c0-1.66-.67-3.16-1.76-4.24zM12 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM6.93 4.93L5.52 3.52A9.969 9.969 0 0 0 2 12c0 2.76 1.12 5.26 2.93 7.07l1.41-1.41A8.014 8.014 0 0 1 4 12c0-2.21.9-4.21 2.34-5.66l-.41-1.41zM8.17 7.17L6.76 5.76A5.976 5.976 0 0 0 5 12c0 1.66.67 3.16 1.76 4.24l1.41-1.41A4.007 4.007 0 0 1 7 12c0-1.1.45-2.1 1.17-2.83z"/></svg>',
     bat: '<svg viewBox="0 0 24 24"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg>',
     pin: '<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>',
-    depth: '<svg viewBox="0 0 24 24"><path d="M12 2L4 12h3v8h10v-8h3L12 2zm1 14h-2v-4h2v4z"/></svg>',
+    depth: '<svg viewBox="0 0 24 24"><path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8z"/></svg>',
     leak: '<svg viewBox="0 0 24 24"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2C20 10.48 17.33 6.55 12 2z"/></svg>',
     clock: '<svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>',
     copy: '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>',
@@ -931,7 +1001,9 @@ function hideBar() {
 function dismissDetail() {
     shouldFitBounds = true;
     currentImei = null;
+    selectedPointIndex = -1;
     clearDistanceLine();
+    highlightLayer.clearLayers();
     hideBar();
     trackLayer.clearLayers();
     markersLayer.clearLayers();
@@ -982,6 +1054,8 @@ async function showDetail(imei) {
 async function renderTrack(messages, device) {
     markersLayer.clearLayers();
     trackLayer.clearLayers();
+    highlightLayer.clearLayers();
+    selectedPointIndex = -1;
 
     const name = device ? device.name : '?';
     const imei = device ? device.imei : null;
@@ -1038,13 +1112,17 @@ async function renderTrack(messages, device) {
 
         if (isLatestMsg) {
             const mk = L.marker([m.latitude, m.longitude], { icon: makeMarkerIcon(color, name, isLive) });
-            mk.on('click', e => { L.DomEvent.stopPropagation(e); });
+            mk.on('click', e => {
+                L.DomEvent.stopPropagation(e);
+                selectPoint(m, i, messages, device);
+            });
             mk.addTo(markersLayer);
         } else {
-            const ts = m.created_at ? utc(m.created_at).format('MMM D, h:mm A') : '';
-            const mk = L.marker([m.latitude, m.longitude], { icon: makeTrackPointIcon(color) })
-                .bindPopup(`<b>#${i + 1}</b><br>${m.latitude.toFixed(6)}, ${m.longitude.toFixed(6)}<br>${m.battery_voltage != null ? m.battery_voltage.toFixed(2) + 'V' : ''} · ${m.max_depth != null ? m.max_depth.toFixed(1) + 'm' : ''}<br>${ts}`);
-            mk.on('click', e => { L.DomEvent.stopPropagation(e); });
+            const mk = L.marker([m.latitude, m.longitude], { icon: makeTrackPointIcon(color) });
+            mk.on('click', e => {
+                L.DomEvent.stopPropagation(e);
+                selectPoint(m, i, messages, device);
+            });
             mk.addTo(markersLayer);
         }
     });
@@ -1070,36 +1148,10 @@ async function renderTrack(messages, device) {
         map.fitBounds(fb, { padding: [50, 50], maxZoom: 16 });
     }
 
-    const dist = distanceFromUser(latest.latitude, latest.longitude);
-
-    const telem = [];
-    telem.push(`<span class="telem-item">${ICONS.pin}<span class="tv">${latest.latitude.toFixed(5)}, ${latest.longitude.toFixed(5)}</span></span>`);
-    telem.push(`<span class="telem-item">${ICONS.sat}<span class="tv">${latest.satellite_count != null ? latest.satellite_count : '--'}</span></span>`);
-
-    const batColor = latest.battery_voltage != null && latest.battery_voltage < LOW_VOLTAGE_THRESHOLD ? '#FF9937' : '#41B9C3';
-    const batVal = latest.battery_voltage != null ? latest.battery_voltage.toFixed(2) : '--';
-    telem.push(`<span class="telem-item"><svg viewBox="0 0 24 24" style="fill:${batColor}"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg><span class="tv">${batVal}</span><span class="tu">V</span></span>`);
-
-    telem.push(`<span class="telem-item">${ICONS.depth}<span class="tv">${latest.max_depth != null ? latest.max_depth.toFixed(1) : '--'}</span><span class="tu">m</span></span>`);
-
-    const leakCls = latest.leak_detected ? ' leak-yes' : '';
-    telem.push(`<span class="telem-item${leakCls}">${ICONS.leak}<span class="tv">${latest.leak_detected ? 'LEAK' : 'OK'}</span></span>`);
-
-    telem.push(`<span class="telem-item">${ICONS.clock}<span class="tv">${latest.created_at ? utc(latest.created_at).format('MMM D, h:mm A') : '--'}</span></span>`);
-
-    document.getElementById('detail-telemetry').innerHTML = telem.join('');
-
     document.getElementById('detail-track').textContent =
         `${messages.length} msg · ${dives.length} dive${dives.length !== 1 ? 's' : ''}`;
 
-    document.getElementById('detail-header').innerHTML = `
-        <span class="status-dot ${getStatusClass(device || {})}"></span>
-        <span class="detail-name">${name}</span>
-        <span class="detail-summary">${dist ? `<span>${dist}</span>` : ''}<span>${latest.created_at ? utc(latest.created_at).fromNow() : '--'}</span></span>
-        <span class="detail-actions">${buildActionButtons(latest, name)}</span>
-    `;
-
-    requestAnimationFrame(() => { locateBtn.style.bottom = (bar.offsetHeight + 12) + 'px'; });
+    selectPoint(latest, messages.length - 1, messages, device);
 }
 
 async function copyCoords(text, btn) {
