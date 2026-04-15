@@ -307,6 +307,7 @@ let userLatLng = null;
 let userHeading = null;
 let userMarker = null;
 let hasSavedView = false;
+let shouldFitBounds = true;
 let timeFilterHours = JSON.parse(localStorage.getItem('timeFilterHours'));
 
 function utc(ts) { return moment.utc(ts).local(); }
@@ -415,6 +416,7 @@ function isWithinTimeFilter(createdAt) {
 }
 
 async function onTimeFilterChange() {
+    shouldFitBounds = true;
     if (!currentImei) {
         renderOverview(devicesData);
     } else {
@@ -803,8 +805,10 @@ function renderOverview(devices) {
         bounds.push([lat, lon]);
     });
 
-    if (userLatLng) bounds.push([userLatLng.lat, userLatLng.lng]);
-    if (bounds.length && !hasSavedView) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+    if (bounds.length && shouldFitBounds && !hasSavedView) {
+        if (userLatLng) bounds.push([userLatLng.lat, userLatLng.lng]);
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+    }
     hasSavedView = false;
 
     updateStaleBannerForOverview(devices);
@@ -836,6 +840,7 @@ function setBarState(state) {
 }
 
 function dismissDetail() {
+    shouldFitBounds = true;
     currentImei = null;
     clearDistanceLine();
     setBarState('hidden');
@@ -845,6 +850,7 @@ function dismissDetail() {
 }
 
 async function showDetail(imei) {
+    shouldFitBounds = true;
     currentImei = imei;
     const device = devicesData.find(d => d.imei === imei);
     const name = device ? device.name : imei;
@@ -893,10 +899,12 @@ async function renderTrack(messages, device) {
                     mk.bindPopup(`<b>Dive Start</b><br>${ts}<br><a href="#" onclick="removeDiveStart(${s.id},'${imei}');return false" style="color:#ef4444;font-weight:600;font-size:0.85rem;">Remove</a>`);
                     markersLayer.addLayer(mk);
                 });
-                if (starts.length) {
-                    const bounds = starts.map(s => [s.latitude, s.longitude]);
-                    if (userLatLng) bounds.push([userLatLng.lat, userLatLng.lng]);
-                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+                if (starts.length && shouldFitBounds) {
+                    const fb = starts.map(s => [s.latitude, s.longitude]);
+                    if (userLatLng && userLatLng.distanceTo(L.latLng(starts[0].latitude, starts[0].longitude)) <= 2000) {
+                        fb.push([userLatLng.lat, userLatLng.lng]);
+                    }
+                    map.fitBounds(fb, { padding: [50, 50], maxZoom: 16 });
                 }
             } catch (e) {}
         }
@@ -953,9 +961,13 @@ async function renderTrack(messages, device) {
         } catch (e) {}
     }
 
-    const fitBounds = messages.map(m => [m.latitude, m.longitude]);
-    if (userLatLng) fitBounds.push([userLatLng.lat, userLatLng.lng]);
-    map.fitBounds(fitBounds, { padding: [50, 50], maxZoom: 16 });
+    if (shouldFitBounds) {
+        const fb = messages.map(m => [m.latitude, m.longitude]);
+        if (userLatLng && userLatLng.distanceTo(L.latLng(latest.latitude, latest.longitude)) <= 2000) {
+            fb.push([userLatLng.lat, userLatLng.lng]);
+        }
+        map.fitBounds(fb, { padding: [50, 50], maxZoom: 16 });
+    }
 
     const dist = distanceFromUser(latest.latitude, latest.longitude);
 
@@ -1110,6 +1122,7 @@ function updateTimestamp(count) {
 }
 
 async function poll() {
+    shouldFitBounds = false;
     const devices = await fetchDevices();
     if (!currentImei) {
         renderOverview(devices);
