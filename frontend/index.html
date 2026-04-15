@@ -26,6 +26,16 @@
         .top-bar .subtitle { font-size: 0.72rem; opacity: 0.7; }
         .top-bar .subtitle a { color: #93c5fd; text-decoration: none; opacity: 1; }
         .top-bar .subtitle a:active { text-decoration: underline; }
+        .top-bar-logos {
+            display: none; align-items: center; gap: 8px;
+        }
+        @media (min-width: 480px) {
+            .top-bar-logos { display: flex; }
+        }
+        .top-bar-logos img {
+            width: 30px; height: 30px; border-radius: 50%;
+            object-fit: cover;
+        }
         .top-bar button {
             background: rgba(255,255,255,0.15); border: none; color: #fff;
             padding: 8px 14px; border-radius: 6px; cursor: pointer;
@@ -160,6 +170,15 @@
             border-radius: 12px;
         }
 
+        /* Depth popup */
+        .depth-popup .leaflet-popup-content-wrapper {
+            background: rgba(30,30,60,0.88); color: #fff; border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        }
+        .depth-popup .leaflet-popup-content { margin: 8px 12px; font-size: 0.85rem; font-weight: 500; }
+        .depth-popup .leaflet-popup-tip { background: rgba(30,30,60,0.88); }
+        .depth-popup .leaflet-popup-close-button { color: #fff; }
+
         /* Distance line tooltip */
         .distance-tooltip {
             background: rgba(30,30,60,0.88) !important; color: #fff !important;
@@ -169,14 +188,6 @@
             white-space: nowrap !important;
         }
         .distance-tooltip::before { border: none !important; }
-
-        /* Stale data warning banner */
-        .stale-banner {
-            padding: 6px 14px; font-size: 0.78rem; font-weight: 600;
-            text-align: center; display: none; z-index: 1;
-        }
-        .stale-banner.warn { display: block; background: #fef3c7; color: #92400e; }
-        .stale-banner.danger { display: block; background: #fee2e2; color: #991b1b; }
 
         /* Time filter control */
         .time-filter-control {
@@ -249,12 +260,15 @@
             <h1>DORIS Tracker</h1>
             <div class="subtitle" id="last-update">Loading...</div>
         </div>
+        <div class="top-bar-logos">
+            <img src="img/BlueRobotics-Thruster-Icon-Blue.png" alt="Blue Robotics">
+            <img src="img/odl-logo-circle.png" alt="ODL">
+        </div>
         <button id="wake-lock-btn" class="wake-lock-btn hidden" onclick="toggleWakeLock()" title="Keep screen on">
             <svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>
             <span>Screen</span>
         </button>
     </div>
-    <div class="stale-banner" id="stale-banner"></div>
     <div id="map"></div>
 </div>
 
@@ -345,12 +359,28 @@ function initMap() {
         maxZoom: 19,
     }).addTo(map);
 
+    const bathyLayer = L.tileLayer.wms('https://wms.gebco.net/mapserv?', {
+        layers: 'gebco_latest_2',
+        format: 'image/png',
+        transparent: true,
+        opacity: 0.5,
+        attribution: '&copy; <a href="https://www.gebco.net">GEBCO</a>',
+    });
+
+    const contourLayer = L.tileLayer(
+        'https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/GEBCO_contours/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; <a href="https://www.gebco.net">GEBCO</a> / NOAA NCEI',
+        opacity: 0.7,
+        maxNativeZoom: 10,
+        maxZoom: 20,
+    });
+
     initTimeFilterControl();
     initDiveStartControl();
 
     L.control.layers(
         { 'Satellite': satelliteLayer, 'Street': streetLayer },
-        null,
+        { 'Bathymetry': bathyLayer, 'Depth Contours': contourLayer },
         { position: 'topright' }
     ).addTo(map);
 
@@ -358,8 +388,49 @@ function initMap() {
     trackLayer = L.layerGroup().addTo(map);
     lineLayer = L.layerGroup().addTo(map);
 
-    map.on('click', () => dismissDetail());
+    map.on('click', onMapClick);
     map.on('moveend', saveMapView);
+}
+
+function onMapClick(e) {
+    if (currentImei) {
+        dismissDetail();
+        return;
+    }
+    queryDepth(e.latlng);
+}
+
+async function queryDepth(latlng) {
+    const size = map.getSize();
+    const bounds = map.getBounds();
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    const point = map.latLngToContainerPoint(latlng);
+
+    const url = 'https://wms.gebco.net/mapserv?'
+        + 'SERVICE=WMS&VERSION=1.1.1&REQUEST=GetFeatureInfo'
+        + '&LAYERS=gebco_latest_2&QUERY_LAYERS=gebco_latest_2'
+        + '&INFO_FORMAT=text/plain'
+        + '&SRS=EPSG:4326'
+        + `&BBOX=${sw.lng},${sw.lat},${ne.lng},${ne.lat}`
+        + `&WIDTH=${size.x}&HEIGHT=${size.y}`
+        + `&X=${Math.round(point.x)}&Y=${Math.round(point.y)}`;
+
+    try {
+        const resp = await fetch(url);
+        const text = await resp.text();
+        const match = text.match(/value_list\s*=\s*'([^']+)'/);
+        if (match) {
+            const elevation = parseInt(match[1], 10);
+            const label = elevation <= 0
+                ? `Depth: ${Math.abs(elevation).toLocaleString()} m`
+                : `Elevation: ${elevation.toLocaleString()} m`;
+            L.popup({ className: 'depth-popup', closeButton: true })
+                .setLatLng(latlng)
+                .setContent(`<b>${label}</b><br>${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`)
+                .openOn(map);
+        }
+    } catch (e) {}
 }
 
 function saveMapView() {
@@ -806,12 +877,10 @@ function renderOverview(devices) {
     });
 
     if (bounds.length && shouldFitBounds && !hasSavedView) {
-        if (userLatLng) bounds.push([userLatLng.lat, userLatLng.lng]);
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
     }
     hasSavedView = false;
 
-    updateStaleBannerForOverview(devices);
 }
 
 // ── Marker Click → show detail bar ──
@@ -992,7 +1061,6 @@ async function renderTrack(messages, device) {
     document.getElementById('track-info').textContent =
         `${messages.length} messages · ${dives.length} dive${dives.length !== 1 ? 's' : ''}`;
 
-    updateStaleBanner(latest.created_at);
     renderActions(latest, name);
 }
 
@@ -1077,38 +1145,6 @@ barHandle.addEventListener('click', () => {
     if (barState === 'peek') setBarState('expanded');
     else if (barState === 'expanded') setBarState('peek');
 });
-
-// ── Stale Data Banner ──
-
-const STALE_WARN_MINUTES = 30;
-const STALE_DANGER_MINUTES = 120;
-
-function updateStaleBanner(createdAt) {
-    const banner = document.getElementById('stale-banner');
-    if (!createdAt) {
-        banner.className = 'stale-banner';
-        return;
-    }
-    const age = ageMinutes(createdAt);
-    if (age >= STALE_DANGER_MINUTES) {
-        banner.className = 'stale-banner danger';
-        banner.textContent = `Last report ${utc(createdAt).fromNow()} \u2014 position unreliable`;
-    } else if (age >= STALE_WARN_MINUTES) {
-        banner.className = 'stale-banner warn';
-        banner.textContent = `Last report ${utc(createdAt).fromNow()} \u2014 position may have drifted`;
-    } else {
-        banner.className = 'stale-banner';
-    }
-}
-
-function updateStaleBannerForOverview(devices) {
-    const withMessages = devices.filter(d => d.latest_message && d.latest_message.created_at);
-    if (!withMessages.length) { updateStaleBanner(null); return; }
-    const oldest = withMessages.reduce((a, b) =>
-        moment.utc(a.latest_message.created_at).isBefore(moment.utc(b.latest_message.created_at)) ? a : b
-    );
-    updateStaleBanner(oldest.latest_message.created_at);
-}
 
 // ── Polling ──
 
