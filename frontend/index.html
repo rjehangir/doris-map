@@ -489,11 +489,7 @@ async function confirmDiveStart() {
         });
         if (resp.ok) {
             hideDiveStartDialog();
-            if (currentImei === imei) {
-                const device = devicesData.find(d => d.imei === imei);
-                const messages = await fetchTrack(imei);
-                renderTrack(messages, device);
-            }
+            showDetail(imei);
         } else {
             alert('Failed to save dive start. Please try again.');
         }
@@ -887,6 +883,23 @@ async function renderTrack(messages, device) {
             '<div class="telemetry-item" style="grid-column:1/-1;"><div class="value">No messages</div></div>';
         document.getElementById('track-info').textContent = '';
         document.getElementById('action-row').innerHTML = '';
+        if (imei) {
+            try {
+                const starts = await fetchDiveStarts(imei);
+                starts.forEach(s => {
+                    const mk = L.marker([s.latitude, s.longitude], { icon: makeDiveStartIcon(), zIndexOffset: 500 });
+                    mk.on('click', e => { L.DomEvent.stopPropagation(e); });
+                    const ts = s.created_at ? utc(s.created_at).format('MMM D, h:mm A') : '';
+                    mk.bindPopup(`<b>Dive Start</b><br>${ts}<br><a href="#" onclick="removeDiveStart(${s.id},'${imei}');return false" style="color:#ef4444;font-weight:600;font-size:0.85rem;">Remove</a>`);
+                    markersLayer.addLayer(mk);
+                });
+                if (starts.length) {
+                    const bounds = starts.map(s => [s.latitude, s.longitude]);
+                    if (userLatLng) bounds.push([userLatLng.lat, userLatLng.lng]);
+                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+                }
+            } catch (e) {}
+        }
         return;
     }
 
