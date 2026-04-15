@@ -291,7 +291,6 @@
         .direction-arrow.visible { opacity: 1; }
         .direction-arrow svg {
             width: 22px; height: 22px; fill: #41B9C3;
-            transition: transform 0.15s ease;
             filter: drop-shadow(0 0 3px rgba(65, 185, 195, 0.5));
         }
 
@@ -628,12 +627,15 @@ function startOrientationListeners() {
     window.addEventListener('deviceorientation', onDeviceOrientation);
 }
 
+let hasCompassHeading = false;
+let hasAbsoluteOrientation = false;
+
 function initGeolocation() {
     if (!navigator.geolocation) return;
     navigator.geolocation.watchPosition(
         pos => {
             userLatLng = L.latLng(pos.coords.latitude, pos.coords.longitude);
-            if (pos.coords.heading != null && !isNaN(pos.coords.heading)) {
+            if (!hasCompassHeading && pos.coords.heading != null && !isNaN(pos.coords.heading)) {
                 userHeading = pos.coords.heading;
             }
             updateUserMarker();
@@ -652,6 +654,9 @@ function initGeolocation() {
 }
 
 function onDeviceOrientation(e) {
+    if (!e.absolute && hasAbsoluteOrientation) return;
+    if (e.absolute) hasAbsoluteOrientation = true;
+
     let heading = null;
     if (e.absolute && e.alpha != null) {
         heading = (360 - e.alpha) % 360;
@@ -659,6 +664,7 @@ function onDeviceOrientation(e) {
         heading = e.webkitCompassHeading;
     }
     if (heading != null && !isNaN(heading)) {
+        hasCompassHeading = true;
         userHeading = heading;
         updateUserMarkerRotation();
         updateDirectionArrow();
