@@ -13,6 +13,8 @@
 
         #app { height: 100%; display: flex; flex-direction: column; }
         #map { flex: 1; z-index: 0; }
+        .leaflet-container { cursor: default !important; }
+        .leaflet-container.leaflet-drag-target { cursor: grabbing !important; }
 
         /* Top bar */
         .top-bar {
@@ -564,7 +566,8 @@ function updateUserMarker() {
         userMarker.setLatLng(userLatLng);
         userMarker.setIcon(makeUserIcon());
     } else {
-        userMarker = L.marker(userLatLng, { icon: makeUserIcon(), zIndexOffset: 1000, interactive: false }).addTo(map);
+        userMarker = L.marker(userLatLng, { icon: makeUserIcon(), zIndexOffset: 1000 }).addTo(map);
+        userMarker.on('click', e => { L.DomEvent.stopPropagation(e); });
     }
 }
 
