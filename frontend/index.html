@@ -42,9 +42,6 @@
             font-size: 0.85rem; min-width: 44px; min-height: 44px;
         }
         .top-bar button:hover { background: rgba(255,255,255,0.25); }
-        .wake-lock-btn { display: flex; align-items: center; gap: 6px; font-size: 0.75rem !important; }
-        .wake-lock-btn svg { width: 18px; height: 18px; fill: currentColor; }
-        .wake-lock-btn.active { background: rgba(34,197,94,0.3) !important; }
 
         /* Detail bar */
         .detail-bar {
@@ -264,10 +261,6 @@
             <img src="img/BlueRobotics-Thruster-Icon-Blue.png" alt="Blue Robotics">
             <img src="img/odl-logo-circle.png" alt="ODL">
         </div>
-        <button id="wake-lock-btn" class="wake-lock-btn hidden" onclick="toggleWakeLock()" title="Keep screen on">
-            <svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>
-            <span>Screen</span>
-        </button>
     </div>
     <div id="map"></div>
 </div>
@@ -1173,38 +1166,19 @@ async function poll() {
 // ── Wake Lock ──
 
 let wakeLock = null;
-const wakeLockBtn = document.getElementById('wake-lock-btn');
 
 function initWakeLock() {
     if (!('wakeLock' in navigator)) return;
-    wakeLockBtn.classList.remove('hidden');
     requestWakeLock();
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && wakeLock !== null) requestWakeLock();
+        if (document.visibilityState === 'visible') requestWakeLock();
     });
 }
 
 async function requestWakeLock() {
     try {
         wakeLock = await navigator.wakeLock.request('screen');
-        wakeLockBtn.classList.add('active');
-        wakeLock.addEventListener('release', () => {
-            if (wakeLock) wakeLockBtn.classList.remove('active');
-        });
-    } catch (e) {
-        wakeLockBtn.classList.remove('active');
-    }
-}
-
-async function toggleWakeLock() {
-    if (wakeLock) {
-        const ref = wakeLock;
-        wakeLock = null;
-        await ref.release();
-        wakeLockBtn.classList.remove('active');
-    } else {
-        await requestWakeLock();
-    }
+    } catch (e) {}
 }
 
 // ── Init ──
