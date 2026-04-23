@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, UniqueConstraint
 
 from database import Base
 
@@ -45,3 +45,18 @@ class DiveStart(Base):
     name = Column(String, nullable=True)
     notes = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class LocationLabel(Base):
+    __tablename__ = "location_labels"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lat_grid = Column(Float, index=True, nullable=False)
+    lon_grid = Column(Float, index=True, nullable=False)
+    label = Column(String, nullable=False)
+    source = Column(String, default="auto", nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        UniqueConstraint("lat_grid", "lon_grid", name="uq_location_grid"),
+    )

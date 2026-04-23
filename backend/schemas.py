@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional, Tuple
 
 from pydantic import BaseModel, field_serializer
 
@@ -73,3 +73,22 @@ class DiveStartResponse(BaseModel):
         if v is None:
             return None
         return v.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+class GeocodeBatchRequest(BaseModel):
+    coords: List[Tuple[float, float]]
+
+
+class GeocodeOverrideRequest(BaseModel):
+    latitude: float
+    longitude: float
+    label: str
+
+
+class LocationLabelResponse(BaseModel):
+    lat_grid: float
+    lon_grid: float
+    label: str
+    source: str
+
+    model_config = {"from_attributes": True}

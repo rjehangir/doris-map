@@ -1,9 +1,10 @@
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Iterable, Optional
 
 from loguru import logger
 from sqlalchemy.orm import Session
 
+import geocode
 import models
 import schemas
 
@@ -133,6 +134,25 @@ def get_recent_messages(db: Session, hours: int = 24):
     )
 
 
+def get_messages_paginated(
+    db: Session,
+    imei: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 100,
+):
+    q = db.query(models.DorisMessage)
+    if imei:
+        q = q.filter(models.DorisMessage.device_imei == imei)
+    total = q.count()
+    rows = (
+        q.order_by(models.DorisMessage.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return rows, total
+
+
 # ── Dive Starts ──
 
 
@@ -188,3 +208,98 @@ def delete_dive_start(db: Session, dive_start_id: int) -> bool:
     db.commit()
     logger.info(f"Deleted dive start id={dive_start_id}")
     return True
+
+
+# ── Location Labels ──
+
+
+def get_location_label(db: Session, lat: float, lon: float) -> Optional[models.LocationLabel]:
+    g_lat, g_lon = geocode.grid(lat, lon)
+    return (
+        db.query(models.LocationLabel)
+        .filter(
+            models.LocationLabel.lat_grid == g_lat,
+            models.LocationLabel.lon_grid == g_lon,
+        )
+        .first()
+    )
+
+
+def get_or_create_location_label(
+    db: Session, lat: float, lon: float
+) -> models.LocationLabel:
+    """Return cached label for the grid cell or fetch from Nominatim and store."""
+    g_lat, g_lon = geocode.grid(lat, lon)
+    row = (
+        db.query(models.LocationLabel)
+        .filter(
+            models.LocationLabel.lat_grid == g_lat,
+            models.LocationLabel.lon_grid == g_lon,
+        )
+        .first()
+    )
+    if row is not None:
+        return row
+
+    label = geocode.nominatim_reverse(g_lat, g_lon)
+    row = models.LocationLabel(
+        lat_grid=g_lat,
+        lon_grid=g_lon,
+        label=label,
+        source="auto",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    logger.info(f"Cached location label for ({g_lat}, {g_lon}): {label}")
+    return row
+
+
+def get_location_labels_batch(
+    db: Session, coords: Iterable[tuple]
+) -> list[models.LocationLabel]:
+    """Resolve labels for many coordinates, deduped by grid cell.
+
+    Cached cells are returned immediately; misses trigger rate-limited Nominatim calls.
+    """
+    seen: dict[tuple, models.LocationLabel] = {}
+    for lat, lon in coords:
+        if lat is None or lon is None:
+            continue
+        key = geocode.grid(lat, lon)
+        if key in seen:
+            continue
+        seen[key] = get_or_create_location_label(db, lat, lon)
+    return list(seen.values())
+
+
+def set_user_location_label(
+    db: Session, lat: float, lon: float, label: str
+) -> models.LocationLabel:
+    g_lat, g_lon = geocode.grid(lat, lon)
+    row = (
+        db.query(models.LocationLabel)
+        .filter(
+            models.LocationLabel.lat_grid == g_lat,
+            models.LocationLabel.lon_grid == g_lon,
+        )
+        .first()
+    )
+    now = datetime.now(timezone.utc)
+    if row is not None:
+        row.label = label
+        row.source = "user"
+        row.updated_at = now
+    else:
+        row = models.LocationLabel(
+            lat_grid=g_lat,
+            lon_grid=g_lon,
+            label=label,
+            source="user",
+            updated_at=now,
+        )
+        db.add(row)
+    db.commit()
+    db.refresh(row)
+    logger.info(f"User override location label for ({g_lat}, {g_lon}): {label}")
+    return row

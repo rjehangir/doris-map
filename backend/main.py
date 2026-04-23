@@ -25,11 +25,22 @@ from crud import (
     get_device_name,
     get_dive_starts,
     get_latest_message_per_device,
+    get_location_labels_batch,
+    get_messages_paginated,
     get_recent_messages,
+    set_user_location_label,
     update_dive_start,
 )
 from database import SessionLocal, engine
-from schemas import DiveStartCreate, DiveStartResponse, DiveStartUpdate, DorisMessageResponse
+from schemas import (
+    DiveStartCreate,
+    DiveStartResponse,
+    DiveStartUpdate,
+    DorisMessageResponse,
+    GeocodeBatchRequest,
+    GeocodeOverrideRequest,
+    LocationLabelResponse,
+)
 
 
 class PrettyJSONResponse(StarletteResponse):
@@ -209,6 +220,25 @@ async def recent_messages(hours: int = 24, db: Session = Depends(get_db)):
     return [serialize_message(m) for m in messages]
 
 
+@app.get("/api/messages")
+async def list_messages(
+    imei: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 100,
+    db: Session = Depends(get_db),
+):
+    """Paginated list of all messages, sorted by date desc, optionally filtered by IMEI."""
+    page = max(page, 1)
+    page_size = max(1, min(page_size, 500))
+    rows, total = get_messages_paginated(db, imei=imei, page=page, page_size=page_size)
+    return {
+        "messages": [serialize_message(m) for m in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
 # ── Dive Starts ──
 
 
@@ -242,6 +272,28 @@ async def remove_dive_start(dive_start_id: int, db: Session = Depends(get_db)):
     if not deleted:
         return {"status": "not_found"}
     return {"status": "ok"}
+
+
+# ── Geocoding ──
+
+
+@app.post("/api/geocode/lookup")
+async def geocode_lookup(body: GeocodeBatchRequest, db: Session = Depends(get_db)):
+    """Reverse-geocode a batch of coordinates with grid-based caching."""
+    rows = get_location_labels_batch(db, body.coords)
+    return {
+        "labels": [LocationLabelResponse.model_validate(r).model_dump() for r in rows],
+    }
+
+
+@app.put("/api/geocode")
+async def geocode_override(body: GeocodeOverrideRequest, db: Session = Depends(get_db)):
+    """Save a user-provided label for the grid cell containing the given coords."""
+    label = (body.label or "").strip()
+    if not label:
+        return {"status": "invalid", "error": "label cannot be empty"}
+    row = set_user_location_label(db, body.latitude, body.longitude, label)
+    return LocationLabelResponse.model_validate(row).model_dump()
 
 
 if __name__ == "__main__":

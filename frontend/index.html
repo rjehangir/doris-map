@@ -280,6 +280,111 @@
         .modal-actions .modal-confirm:active { background: linear-gradient(135deg, #187D8B 0%, #004D64 100%); }
         .modal-actions .modal-confirm:disabled { background: rgba(65, 185, 195, 0.3); border-color: transparent; color: rgba(255,255,255,0.5); cursor: default; }
 
+        /* Messages table modal */
+        .modal-overlay.full {
+            padding: 0; align-items: stretch; justify-content: stretch;
+        }
+        .modal-card.full {
+            max-width: none; width: 100%; height: 100%; border-radius: 0;
+            padding: 0; display: flex; flex-direction: column;
+            background: rgba(14, 36, 70, 0.97);
+        }
+        .messages-header {
+            display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+            border-bottom: 1px solid rgba(65, 185, 195, 0.2);
+            background: rgba(0, 77, 100, 0.6); flex-shrink: 0;
+        }
+        .messages-header h2 {
+            font-size: 1rem; color: #fff; margin: 0; font-weight: 600;
+            font-family: 'Montserrat', sans-serif;
+        }
+        .messages-header .spacer { flex: 1; }
+        .messages-header select {
+            background: rgba(14, 36, 70, 0.6); color: #FFF8A7;
+            border: 1px solid rgba(65, 185, 195, 0.3); border-radius: 6px;
+            padding: 6px 10px; font-size: 0.82rem; min-height: 36px;
+            font-family: 'Montserrat', sans-serif;
+        }
+        .messages-header button {
+            background: rgba(65, 185, 195, 0.2); border: none; color: #fff;
+            padding: 6px 10px; border-radius: 6px; cursor: pointer;
+            min-height: 36px; min-width: 36px;
+            display: inline-flex; align-items: center; justify-content: center;
+        }
+        .messages-header button:hover { background: rgba(65, 185, 195, 0.35); }
+        .messages-header button svg { width: 16px; height: 16px; fill: currentColor; }
+        .messages-header .btn-close { font-size: 1.2rem; line-height: 1; font-weight: 600; }
+
+        .messages-body {
+            flex: 1; overflow: auto; -webkit-overflow-scrolling: touch;
+        }
+        .messages-table {
+            width: 100%; border-collapse: collapse;
+            font-size: 0.78rem; color: #96EEF2;
+            font-family: 'Montserrat', sans-serif;
+        }
+        .messages-table thead th {
+            position: sticky; top: 0; z-index: 1;
+            background: rgba(0, 77, 100, 0.95);
+            color: #41B9C3; font-weight: 600; text-align: left;
+            padding: 8px 10px; font-size: 0.7rem;
+            text-transform: uppercase; letter-spacing: 0.4px;
+            border-bottom: 1px solid rgba(65, 185, 195, 0.3);
+            white-space: nowrap;
+        }
+        .messages-table tbody tr {
+            border-bottom: 1px solid rgba(65, 185, 195, 0.08);
+            cursor: pointer;
+        }
+        .messages-table tbody tr:hover { background: rgba(65, 185, 195, 0.08); }
+        .messages-table tbody tr:active { background: rgba(65, 185, 195, 0.16); }
+        .messages-table td {
+            padding: 7px 10px; white-space: nowrap;
+        }
+        .messages-table td.col-name { color: #fff; font-weight: 500; }
+        .messages-table td.col-coord { color: #FFF8A7; font-variant-numeric: tabular-nums; }
+        .messages-table .col-cep { color: rgba(150, 238, 242, 0.6); font-size: 0.72rem; margin-left: 4px; }
+        .messages-table td.col-location { color: #96EEF2; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+        .messages-table td.col-location:hover { background: rgba(65, 185, 195, 0.12); }
+        .messages-table td.col-location.user-label .loc-text { color: #FFF8A7; font-style: italic; }
+        .messages-table td.col-location input.loc-edit {
+            background: rgba(0, 77, 100, 0.6); border: 1px solid #41B9C3;
+            border-radius: 4px; color: #FFF8A7; padding: 2px 6px;
+            font-size: 0.78rem; font-family: 'Montserrat', sans-serif;
+            width: 100%; outline: none;
+        }
+        .messages-table td.col-num,
+        .messages-table th.col-num-h { text-align: right; }
+        .messages-table td.col-num { color: #FFF8A7; font-variant-numeric: tabular-nums; }
+        .messages-table .col-unit {
+            color: rgba(150, 238, 242, 0.6); font-size: 0.7rem;
+            margin-left: 2px; font-weight: 400;
+        }
+        .messages-table td.col-leak.leak-yes { color: #DD2C1D; font-weight: 600; }
+        .messages-table .row-link {
+            color: #41B9C3; text-decoration: none;
+        }
+        .messages-table .row-link svg { width: 14px; height: 14px; fill: currentColor; vertical-align: middle; }
+        .messages-empty {
+            padding: 30px; text-align: center; color: rgba(150, 238, 242, 0.6);
+            font-size: 0.85rem;
+        }
+
+        .messages-footer {
+            display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+            border-top: 1px solid rgba(65, 185, 195, 0.2);
+            background: rgba(0, 77, 100, 0.6); flex-shrink: 0;
+            font-size: 0.78rem; color: #96EEF2;
+        }
+        .messages-footer .info { flex: 1; }
+        .messages-footer button {
+            background: rgba(65, 185, 195, 0.2); border: none; color: #fff;
+            padding: 6px 12px; border-radius: 6px; cursor: pointer;
+            font-size: 0.82rem; min-height: 34px;
+        }
+        .messages-footer button:hover:not(:disabled) { background: rgba(65, 185, 195, 0.35); }
+        .messages-footer button:disabled { opacity: 0.4; cursor: default; }
+
         /* Leaflet control overrides for dark theme */
         .leaflet-control-layers {
             background: rgba(14, 36, 70, 0.92) !important;
@@ -324,9 +429,14 @@
             <h1>DORIS Tracker</h1>
             <div class="subtitle" id="last-update">Loading...</div>
         </div>
-        <div class="top-bar-logos">
-            <img src="img/BlueRobotics-Thruster-Icon-Blue.png" alt="Blue Robotics">
-            <img src="img/odl-logo-circle.png" alt="ODL">
+        <div style="display:flex; align-items:center; gap:8px;">
+            <button onclick="openMessagesModal()" title="View all messages" style="display:flex; align-items:center; justify-content:center; padding:0; width:40px; height:40px; min-width:40px; min-height:40px;">
+                <svg viewBox="0 0 24 24" style="width:18px; height:18px; fill:#41B9C3;"><path d="M3 5h18v2H3V5zm0 6h18v2H3v-2zm0 6h18v2H3v-2z"/></svg>
+            </button>
+            <div class="top-bar-logos">
+                <img src="img/BlueRobotics-Thruster-Icon-Blue.png" alt="Blue Robotics">
+                <img src="img/odl-logo-circle.png" alt="ODL">
+            </div>
         </div>
     </div>
     <div id="map"></div>
@@ -363,6 +473,30 @@
         <div class="modal-actions">
             <button onclick="hideDiveStartDialog()">Cancel</button>
             <button class="modal-confirm" id="dive-start-confirm" onclick="confirmDiveStart()">Log Dive Start</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay full hidden" id="messages-modal" onclick="if(event.target===this)closeMessagesModal()">
+    <div class="modal-card full">
+        <div class="messages-header">
+            <h2>Messages</h2>
+            <select id="messages-filter" onchange="onMessagesFilterChange()">
+                <option value="">All vehicles</option>
+            </select>
+            <div class="spacer"></div>
+            <button onclick="loadMessagesPage()" title="Refresh">
+                <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-8 3.58-8 8s3.58 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+            </button>
+            <button class="btn-close" onclick="closeMessagesModal()" title="Close">&times;</button>
+        </div>
+        <div class="messages-body" id="messages-body">
+            <div class="messages-empty">Loading...</div>
+        </div>
+        <div class="messages-footer">
+            <span class="info" id="messages-info">--</span>
+            <button id="messages-prev" onclick="changeMessagesPage(-1)">Prev</button>
+            <button id="messages-next" onclick="changeMessagesPage(1)">Next</button>
         </div>
     </div>
 </div>
@@ -1221,7 +1355,7 @@ function buildActionButtons(latest, deviceName) {
         + `<button class="btn-close" onclick="dismissDetail()" title="Close">&times;</button>`;
 }
 
-async function showDetail(imei) {
+async function showDetail(imei, targetMessageId = null) {
     shouldFitBounds = true;
     currentImei = imei;
     updateHash();
@@ -1247,8 +1381,13 @@ async function showDetail(imei) {
 
     showBar();
 
-    const messages = await fetchTrack(imei);
-    renderTrack(messages, device);
+    if (targetMessageId != null) pendingTargetMessageId = targetMessageId;
+    let messages = await fetchTrack(imei);
+    if (targetMessageId != null && !messages.find(m => m.id === targetMessageId)) {
+        messages = await fetchTrackUnfiltered(imei);
+        pendingTargetMessageId = targetMessageId;
+    }
+    await renderTrack(messages, device);
     updateTimestamp();
 }
 
@@ -1392,8 +1531,20 @@ async function renderTrack(messages, device) {
     document.getElementById('detail-track').textContent =
         segLabels.length === 1 ? segLabels[0] : segLabels.join(' · ');
 
-    const restoreIndex = (prevSelectedIndex >= 0 && prevSelectedIndex < messages.length)
-        ? prevSelectedIndex : messages.length - 1;
+    let restoreIndex;
+    if (pendingTargetMessageId != null) {
+        const targetIdx = messages.findIndex(m => m.id === pendingTargetMessageId);
+        pendingTargetMessageId = null;
+        restoreIndex = targetIdx >= 0 ? targetIdx : messages.length - 1;
+        if (targetIdx >= 0) {
+            selectPoint(messages[restoreIndex], restoreIndex, messages, device);
+            map.panTo([messages[restoreIndex].latitude, messages[restoreIndex].longitude]);
+            return;
+        }
+    } else {
+        restoreIndex = (prevSelectedIndex >= 0 && prevSelectedIndex < messages.length)
+            ? prevSelectedIndex : messages.length - 1;
+    }
     selectPoint(messages[restoreIndex], restoreIndex, messages, device);
 }
 
@@ -1453,6 +1604,252 @@ async function requestWakeLock() {
     try {
         wakeLock = await navigator.wakeLock.request('screen');
     } catch (e) {}
+}
+
+// ── Messages Modal ──
+
+const MSG_PAGE_SIZE = 100;
+let msgTablePage = 1;
+let msgTableImei = '';
+let msgTableTotal = 0;
+let pendingTargetMessageId = null;
+
+function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function populateMessagesFilter() {
+    const sel = document.getElementById('messages-filter');
+    const current = sel.value;
+    const opts = ['<option value="">All vehicles</option>'];
+    devicesData.forEach(d => {
+        opts.push(`<option value="${escapeHtml(d.imei)}">${escapeHtml(d.name)}</option>`);
+    });
+    sel.innerHTML = opts.join('');
+    sel.value = current;
+}
+
+function openMessagesModal() {
+    populateMessagesFilter();
+    msgTablePage = 1;
+    document.getElementById('messages-modal').classList.remove('hidden');
+    loadMessagesPage();
+}
+
+function closeMessagesModal() {
+    document.getElementById('messages-modal').classList.add('hidden');
+}
+
+function onMessagesFilterChange() {
+    msgTableImei = document.getElementById('messages-filter').value || '';
+    msgTablePage = 1;
+    loadMessagesPage();
+}
+
+function changeMessagesPage(delta) {
+    const totalPages = Math.max(1, Math.ceil(msgTableTotal / MSG_PAGE_SIZE));
+    const next = Math.min(Math.max(msgTablePage + delta, 1), totalPages);
+    if (next === msgTablePage) return;
+    msgTablePage = next;
+    loadMessagesPage();
+}
+
+async function loadMessagesPage() {
+    const body = document.getElementById('messages-body');
+    body.innerHTML = '<div class="messages-empty">Loading...</div>';
+    try {
+        const params = new URLSearchParams({
+            page: String(msgTablePage),
+            page_size: String(MSG_PAGE_SIZE),
+        });
+        if (msgTableImei) params.set('imei', msgTableImei);
+        const resp = await fetch('/api/messages?' + params.toString());
+        const data = await resp.json();
+        msgTableTotal = data.total || 0;
+        renderMessagesTable(data.messages || []);
+        updateMessagesFooter();
+    } catch (e) {
+        body.innerHTML = '<div class="messages-empty">Failed to load messages.</div>';
+    }
+}
+
+function deviceNameForImei(imei) {
+    const d = devicesData.find(x => x.imei === imei);
+    return d ? d.name : imei;
+}
+
+function renderMessagesTable(messages) {
+    const body = document.getElementById('messages-body');
+    if (!messages.length) {
+        body.innerHTML = '<div class="messages-empty">No messages found.</div>';
+        return;
+    }
+    const linkSvg = '<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>';
+    const rows = messages.map(m => {
+        const name = escapeHtml(deviceNameForImei(m.device_imei));
+        const time = m.created_at ? moment.utc(m.created_at).local().format('MMM D, HH:mm:ss') : '--';
+        const lat = m.latitude != null ? m.latitude.toFixed(5) : '--';
+        const lon = m.longitude != null ? m.longitude.toFixed(5) : '--';
+        const iLat = m.iridium_latitude != null ? m.iridium_latitude.toFixed(3) : '--';
+        const iLon = m.iridium_longitude != null ? m.iridium_longitude.toFixed(3) : '--';
+        const iCep = m.iridium_cep != null ? `±${m.iridium_cep}km` : '';
+        const iridiumCell = (m.iridium_latitude != null && m.iridium_longitude != null)
+            ? `${iLat}, ${iLon}${iCep ? ` <span class="col-cep">${iCep}</span>` : ''}`
+            : '--';
+        const sat = m.satellite_count != null ? m.satellite_count : '--';
+        const bat = m.battery_voltage != null ? m.battery_voltage.toFixed(2) : '--';
+        const dep = m.max_depth != null ? m.max_depth.toFixed(1) : '--';
+        const leakCls = m.leak_detected ? ' leak-yes' : '';
+        const leak = m.leak_detected ? 'LEAK' : 'OK';
+        const momsn = m.momsn != null ? m.momsn : '--';
+        const locCell = (m.latitude != null && m.longitude != null)
+            ? `<td class="col-location" data-lat="${m.latitude}" data-lon="${m.longitude}" title="Tap to override" onclick="event.stopPropagation();editLocationLabel(this)"><span class="loc-text">…</span></td>`
+            : `<td class="col-location">--</td>`;
+        const batCell = m.battery_voltage != null
+            ? `${bat}<span class="col-unit">V</span>` : '--';
+        const depCell = m.max_depth != null
+            ? `${dep}<span class="col-unit">m</span>` : '--';
+        return `<tr onclick="openMessageOnMap('${escapeHtml(m.device_imei)}', ${m.id})">
+            <td>${time}</td>
+            <td class="col-name">${name}</td>
+            ${locCell}
+            <td class="col-coord">${lat}, ${lon}</td>
+            <td class="col-coord">${iridiumCell}</td>
+            <td class="col-num">${sat}</td>
+            <td class="col-num">${batCell}</td>
+            <td class="col-num">${depCell}</td>
+            <td class="col-leak${leakCls}">${leak}</td>
+            <td class="col-num">${momsn}</td>
+            <td><span class="row-link" title="Open on map">${linkSvg}</span></td>
+        </tr>`;
+    }).join('');
+    body.innerHTML = `<table class="messages-table">
+        <thead><tr>
+            <th>Time</th>
+            <th>Vehicle</th>
+            <th title="Approximate place name from OpenStreetMap (tap a cell to override)">Location</th>
+            <th title="GPS fix reported by the DORIS device">GPS Lat / Lon</th>
+            <th title="Approximate location estimated by the Iridium satellite network">Iridium Lat / Lon</th>
+            <th class="col-num-h">Sat</th>
+            <th class="col-num-h">Battery</th>
+            <th class="col-num-h">Depth</th>
+            <th>Leak</th>
+            <th class="col-num-h">MOMSN</th>
+            <th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+    </table>`;
+    fetchLocationLabels(messages);
+}
+
+function updateMessagesFooter() {
+    const totalPages = Math.max(1, Math.ceil(msgTableTotal / MSG_PAGE_SIZE));
+    const start = msgTableTotal === 0 ? 0 : (msgTablePage - 1) * MSG_PAGE_SIZE + 1;
+    const end = Math.min(msgTablePage * MSG_PAGE_SIZE, msgTableTotal);
+    document.getElementById('messages-info').textContent =
+        `${start}–${end} of ${msgTableTotal} · Page ${msgTablePage} of ${totalPages}`;
+    document.getElementById('messages-prev').disabled = msgTablePage <= 1;
+    document.getElementById('messages-next').disabled = msgTablePage >= totalPages;
+}
+
+async function fetchTrackUnfiltered(imei) {
+    try {
+        const resp = await fetch(`/api/devices/${imei}/messages?limit=10000`);
+        return await resp.json();
+    } catch (e) {
+        return [];
+    }
+}
+
+async function openMessageOnMap(imei, messageId) {
+    closeMessagesModal();
+    const device = devicesData.find(d => d.imei === imei);
+    if (!device) return;
+    await showDetail(imei, messageId);
+}
+
+// ── Location Labels (reverse geocoding) ──
+
+function gridKey(lat, lon) {
+    return `${(+lat).toFixed(2)},${(+lon).toFixed(2)}`;
+}
+
+async function fetchLocationLabels(messages) {
+    const coords = messages
+        .filter(m => m.latitude != null && m.longitude != null)
+        .map(m => [m.latitude, m.longitude]);
+    if (!coords.length) return;
+    let data;
+    try {
+        const resp = await fetch('/api/geocode/lookup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ coords }),
+        });
+        data = await resp.json();
+    } catch (e) {
+        return;
+    }
+    const byKey = new Map();
+    (data.labels || []).forEach(l => {
+        byKey.set(gridKey(l.lat_grid, l.lon_grid), l);
+    });
+    document.querySelectorAll('.col-location[data-lat]').forEach(td => {
+        const l = byKey.get(gridKey(td.dataset.lat, td.dataset.lon));
+        if (!l) return;
+        const txt = td.querySelector('.loc-text');
+        if (txt) txt.textContent = l.label;
+        td.classList.toggle('user-label', l.source === 'user');
+        td.dataset.label = l.label;
+    });
+}
+
+function editLocationLabel(td) {
+    if (td.querySelector('input.loc-edit')) return;
+    const lat = parseFloat(td.dataset.lat);
+    const lon = parseFloat(td.dataset.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    const current = td.dataset.label || td.textContent.trim().replace(/^…$/, '');
+    const original = current;
+    td.innerHTML = `<input class="loc-edit" type="text" value="${escapeHtml(current)}">`;
+    const input = td.querySelector('input.loc-edit');
+    input.focus();
+    input.select();
+
+    let done = false;
+    async function commit() {
+        if (done) return;
+        done = true;
+        const value = input.value.trim();
+        if (!value || value === original) {
+            td.innerHTML = `<span class="loc-text">${escapeHtml(original || '…')}</span>`;
+            return;
+        }
+        td.innerHTML = `<span class="loc-text">${escapeHtml(value)}</span>`;
+        td.dataset.label = value;
+        td.classList.add('user-label');
+        try {
+            await fetch('/api/geocode', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ latitude: lat, longitude: lon, label: value }),
+            });
+        } catch (e) {}
+    }
+    function cancel() {
+        if (done) return;
+        done = true;
+        td.innerHTML = `<span class="loc-text">${escapeHtml(original || '…')}</span>`;
+    }
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    });
+    input.addEventListener('blur', commit);
+    input.addEventListener('click', e => e.stopPropagation());
 }
 
 // ── Deep Link ──
@@ -1531,6 +1928,12 @@ fetchDevices().then(devices => {
     }
 });
 setInterval(poll, POLL_INTERVAL_MS);
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !document.getElementById('messages-modal').classList.contains('hidden')) {
+        closeMessagesModal();
+    }
+});
 </script>
 </body>
 </html>
