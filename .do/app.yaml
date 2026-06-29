@@ -16,5 +16,14 @@ services:
       - key: PORT
         scope: RUN_TIME
         value: "8000"
+      - key: RESEND_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: EMAIL_FROM
+        scope: RUN_TIME
+        value: "DORIS Tracker <notifications@example.com>"
+      - key: APP_BASE_URL
+        scope: RUN_TIME
+        value: "https://doris-tracker.ondigitalocean.app"
     routes:
       - path: /

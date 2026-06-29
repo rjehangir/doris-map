@@ -92,3 +92,40 @@ class LocationLabelResponse(BaseModel):
     source: str
 
     model_config = {"from_attributes": True}
+
+
+# ── Subscriptions ──
+
+
+class SubscribeRequest(BaseModel):
+    email: str
+    # "all" or a specific IMEI; default to "all" if omitted.
+    imei: Optional[str] = "all"
+    wants_realtime: bool = True
+    wants_digest: bool = False
+    digest_frequency: str = "daily"  # 'daily' | 'weekly'
+    digest_hour_utc: int = 13
+    realtime_throttle_minutes: int = 0
+
+
+class SubscriptionItem(BaseModel):
+    # null device_imei = "all units"
+    device_imei: Optional[str] = None
+    wants_realtime: bool = True
+    wants_digest: bool = False
+    digest_frequency: str = "daily"
+    digest_hour_utc: int = 13
+    realtime_throttle_minutes: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class SubscriptionsResponse(BaseModel):
+    email: str
+    verified: bool
+    unsubscribed: bool
+    subscriptions: List[SubscriptionItem]
+
+
+class SubscriptionsUpdate(BaseModel):
+    subscriptions: List[SubscriptionItem]

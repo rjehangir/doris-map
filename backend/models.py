@@ -1,6 +1,16 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, UniqueConstraint
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Float,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import relationship
 
 from database import Base
 
@@ -60,3 +70,62 @@ class LocationLabel(Base):
     __table_args__ = (
         UniqueConstraint("lat_grid", "lon_grid", name="uq_location_grid"),
     )
+
+
+class Subscriber(Base):
+    __tablename__ = "subscribers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    manage_token = Column(String, unique=True, index=True, nullable=False)
+    verified_at = Column(DateTime, nullable=True)
+    unsubscribed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    subscriptions = relationship(
+        "Subscription", back_populates="subscriber", cascade="all, delete-orphan"
+    )
+    tokens = relationship(
+        "EmailToken", back_populates="subscriber", cascade="all, delete-orphan"
+    )
+
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subscriber_id = Column(
+        Integer, ForeignKey("subscribers.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    # NULL device_imei means "all units"
+    device_imei = Column(String, index=True, nullable=True)
+    wants_realtime = Column(Boolean, default=True, nullable=False)
+    wants_digest = Column(Boolean, default=False, nullable=False)
+    digest_frequency = Column(String, default="daily", nullable=False)  # 'daily' | 'weekly'
+    digest_hour_utc = Column(Integer, default=13, nullable=False)
+    realtime_throttle_minutes = Column(Integer, default=0, nullable=False)
+    last_realtime_sent_at = Column(DateTime, nullable=True)
+    last_digest_sent_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    subscriber = relationship("Subscriber", back_populates="subscriptions")
+
+    __table_args__ = (
+        UniqueConstraint("subscriber_id", "device_imei", name="uq_subscription_per_device"),
+    )
+
+
+class EmailToken(Base):
+    __tablename__ = "email_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subscriber_id = Column(
+        Integer, ForeignKey("subscribers.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    token = Column(String, unique=True, index=True, nullable=False)
+    purpose = Column(String, nullable=False)  # 'verify' | 'unsubscribe'
+    expires_at = Column(DateTime, nullable=True)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    subscriber = relationship("Subscriber", back_populates="tokens")

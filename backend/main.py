@@ -2,34 +2,44 @@
 
 import json
 import os
-from datetime import datetime
-from typing import Any, List, Optional
+from datetime import datetime, timezone
+from typing import Any, Optional
 
 import uvicorn
-from fastapi import Depends, FastAPI, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Query
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from sqlalchemy.orm import Session
-from starlette.responses import Response as StarletteResponse
+from starlette.responses import Response
 
+import email_service
 import models
+import notifications
 from crud import (
     auto_register_device,
     create_dive_start,
     create_doris_message,
+    create_verify_token,
     delete_dive_start,
     get_all_devices,
     get_device_by_imei,
     get_device_messages,
-    get_device_name,
     get_dive_starts,
     get_latest_message_per_device,
     get_location_labels_batch,
     get_messages_paginated,
+    get_or_create_subscriber,
     get_recent_messages,
+    get_subscriber_by_email,
+    get_subscriber_by_manage_token,
+    get_unsubscribe_token,
+    get_verify_token,
+    mark_unsubscribed,
+    replace_subscriptions,
     set_user_location_label,
     update_dive_start,
+    upsert_subscription,
 )
 from database import SessionLocal, engine
 from schemas import (
@@ -40,10 +50,14 @@ from schemas import (
     GeocodeBatchRequest,
     GeocodeOverrideRequest,
     LocationLabelResponse,
+    SubscribeRequest,
+    SubscriptionItem,
+    SubscriptionsResponse,
+    SubscriptionsUpdate,
 )
 
 
-class PrettyJSONResponse(StarletteResponse):
+class PrettyJSONResponse(Response):
     media_type = "application/json"
 
     def render(self, content: Any) -> bytes:
@@ -109,6 +123,25 @@ def migrate_dive_start_columns():
 
 migrate_dive_start_columns()
 
+
+def migrate_subscription_tables():
+    """Ensure subscription tables exist on existing deployments."""
+    from sqlalchemy import inspect as sa_inspect
+
+    insp = sa_inspect(engine)
+    existing = set(insp.get_table_names())
+    needed = {"subscribers", "subscriptions", "email_tokens"}
+    missing = needed - existing
+    if missing:
+        # create_all is idempotent and only creates tables that don't exist
+        models.Base.metadata.create_all(bind=engine, tables=[
+            t for t in models.Base.metadata.sorted_tables if t.name in missing
+        ])
+        logger.info(f"Created subscription tables: {sorted(missing)}")
+
+
+migrate_subscription_tables()
+
 app = FastAPI(
     title="DORIS Tracker API",
     description="Multi-device camera tracking system via Iridium / RockBLOCK.",
@@ -116,6 +149,43 @@ app = FastAPI(
 )
 
 app.mount("/ui", StaticFiles(directory="../frontend", html=True), name="static")
+
+
+# ── Digest scheduler ──
+
+_scheduler = None
+
+
+@app.on_event("startup")
+def _start_digest_scheduler():  # pragma: no cover -- scheduler wiring
+    global _scheduler
+    if os.getenv("DISABLE_DIGEST_SCHEDULER", "").lower() in ("1", "true", "yes"):
+        logger.info("Digest scheduler disabled via DISABLE_DIGEST_SCHEDULER")
+        return
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+    except ImportError:
+        logger.warning("apscheduler not installed; skipping digest scheduler")
+        return
+    _scheduler = BackgroundScheduler(timezone="UTC")
+    _scheduler.add_job(
+        notifications.dispatch_digest,
+        "interval",
+        minutes=15,
+        id="dispatch_digest",
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.start()
+    logger.info("Digest scheduler started (every 15 minutes)")
+
+
+@app.on_event("shutdown")
+def _stop_digest_scheduler():  # pragma: no cover
+    global _scheduler
+    if _scheduler:
+        _scheduler.shutdown(wait=False)
+        _scheduler = None
 
 
 def get_db():
@@ -146,6 +216,7 @@ async def root():
 
 @app.post("/rockblock-webhook")
 async def rockblock_webhook(
+    background_tasks: BackgroundTasks,
     imei: str = Form(...),
     serial: str = Form(...),
     momsn: int = Form(...),
@@ -172,6 +243,9 @@ async def rockblock_webhook(
             iridium_longitude=iridium_longitude,
             iridium_cep=iridium_cep,
             hex_data=data,
+        )
+        background_tasks.add_task(
+            notifications.dispatch_realtime_for_message_id, message.id
         )
         return {"status": "ok", "id": message.id}
     except Exception as e:
@@ -294,6 +368,195 @@ async def geocode_override(body: GeocodeOverrideRequest, db: Session = Depends(g
         return {"status": "invalid", "error": "label cannot be empty"}
     row = set_user_location_label(db, body.latitude, body.longitude, label)
     return LocationLabelResponse.model_validate(row).model_dump()
+
+
+# ── Subscriptions ──
+
+
+def _app_base_url() -> str:
+    return os.getenv("APP_BASE_URL", "http://localhost:8000").rstrip("/")
+
+
+def _simple_html(title: str, body: str) -> HTMLResponse:
+    return HTMLResponse(
+        f"""<!DOCTYPE html>
+<html><head><meta charset=\"utf-8\"><title>{title}</title>
+<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+<style>
+  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background: #0E2446; color: #fff; min-height: 100vh; margin: 0;
+          display: flex; align-items: center; justify-content: center; padding: 24px; }}
+  .card {{ background: #13315C; max-width: 460px; padding: 28px 28px 24px; border-radius: 12px;
+           box-shadow: 0 4px 24px rgba(0,0,0,0.3); text-align: center; }}
+  h1 {{ margin: 0 0 12px; font-size: 1.4rem; }}
+  p {{ color: #A4B7CC; line-height: 1.55; margin: 0 0 12px; }}
+  a.btn {{ display: inline-block; padding: 10px 18px; background: #41B9C3;
+           color: #0E2446; font-weight: 600; border-radius: 8px;
+           text-decoration: none; margin-top: 10px; }}
+</style></head>
+<body><div class=\"card\"><h1>{title}</h1>{body}</div></body></html>"""
+    )
+
+
+def _is_valid_email(email: str) -> bool:
+    email = (email or "").strip()
+    return "@" in email and "." in email.split("@")[-1] and len(email) <= 254
+
+
+@app.post("/api/subscribe")
+async def subscribe(
+    body: SubscribeRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Start a subscription flow. Always sends a verify email if unverified.
+
+    Body fields: email, imei ("all" or device IMEI), and notification preferences.
+    """
+    if not _is_valid_email(body.email):
+        raise HTTPException(status_code=400, detail="invalid email")
+
+    device_imei: Optional[str]
+    if body.imei in (None, "", "all"):
+        device_imei = None
+    else:
+        device_imei = body.imei
+        if not get_device_by_imei(db, device_imei):
+            raise HTTPException(status_code=404, detail="unknown device")
+
+    subscriber = get_or_create_subscriber(db, body.email)
+    if subscriber.unsubscribed_at is not None:
+        subscriber.unsubscribed_at = None
+        db.commit()
+
+    upsert_subscription(
+        db,
+        subscriber,
+        device_imei=device_imei,
+        wants_realtime=body.wants_realtime,
+        wants_digest=body.wants_digest,
+        digest_frequency=body.digest_frequency,
+        digest_hour_utc=body.digest_hour_utc,
+        realtime_throttle_minutes=body.realtime_throttle_minutes,
+    )
+
+    if subscriber.verified_at is None:
+        token = create_verify_token(db, subscriber)
+        background_tasks.add_task(
+            email_service.send_verification, subscriber, token.token
+        )
+        return {"status": "verify_email_sent"}
+    return {"status": "subscribed"}
+
+
+@app.get("/api/verify")
+async def verify_subscription(token: str = Query(...), db: Session = Depends(get_db)):
+    row = get_verify_token(db, token)
+    if not row:
+        return _simple_html(
+            "Invalid verification link",
+            "<p>This link is invalid or already used.</p>",
+        )
+    now = datetime.now(timezone.utc)
+    if row.expires_at and row.expires_at.replace(tzinfo=timezone.utc) < now:
+        return _simple_html(
+            "Verification link expired",
+            "<p>Please request a fresh confirmation by subscribing again.</p>"
+            f'<a class="btn" href="{_app_base_url()}/ui">Open tracker</a>',
+        )
+    if row.used_at is None:
+        row.used_at = now
+    subscriber = row.subscriber
+    if subscriber.verified_at is None:
+        subscriber.verified_at = now
+    if subscriber.unsubscribed_at is not None:
+        subscriber.unsubscribed_at = None
+    db.commit()
+    return RedirectResponse(
+        url=f"{_app_base_url()}/ui#subscribed=ok&token={subscriber.manage_token}",
+        status_code=302,
+    )
+
+
+@app.get("/api/manage")
+async def manage_redirect(token: str = Query(...), db: Session = Depends(get_db)):
+    sub = get_subscriber_by_manage_token(db, token)
+    if not sub:
+        return _simple_html(
+            "Invalid management link",
+            "<p>This link is invalid. You can re-subscribe from the tracker.</p>"
+            f'<a class="btn" href="{_app_base_url()}/ui">Open tracker</a>',
+        )
+    return RedirectResponse(
+        url=f"{_app_base_url()}/ui#manage=1&token={token}",
+        status_code=302,
+    )
+
+
+@app.get("/api/subscriptions")
+async def list_subscriptions(token: str = Query(...), db: Session = Depends(get_db)):
+    subscriber = get_subscriber_by_manage_token(db, token)
+    if not subscriber:
+        raise HTTPException(status_code=404, detail="invalid token")
+    return SubscriptionsResponse(
+        email=subscriber.email,
+        verified=subscriber.verified_at is not None,
+        unsubscribed=subscriber.unsubscribed_at is not None,
+        subscriptions=[
+            SubscriptionItem.model_validate(s) for s in subscriber.subscriptions
+        ],
+    ).model_dump()
+
+
+@app.put("/api/subscriptions")
+async def update_subscriptions(
+    body: SubscriptionsUpdate,
+    token: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    subscriber = get_subscriber_by_manage_token(db, token)
+    if not subscriber:
+        raise HTTPException(status_code=404, detail="invalid token")
+    # Validate that referenced IMEIs exist (None = "all" is always allowed).
+    for item in body.subscriptions:
+        if item.device_imei and not get_device_by_imei(db, item.device_imei):
+            raise HTTPException(
+                status_code=400, detail=f"unknown device {item.device_imei}"
+            )
+    replace_subscriptions(db, subscriber, body.subscriptions)
+    if subscriber.unsubscribed_at is not None and body.subscriptions:
+        subscriber.unsubscribed_at = None
+        db.commit()
+    return {"status": "ok"}
+
+
+def _do_unsubscribe(token: str, db: Session) -> HTMLResponse:
+    row = get_unsubscribe_token(db, token)
+    subscriber = row.subscriber if row else get_subscriber_by_manage_token(db, token)
+    if not subscriber:
+        return _simple_html(
+            "Invalid unsubscribe link",
+            "<p>This link is invalid or expired.</p>",
+        )
+    if subscriber.unsubscribed_at is None:
+        mark_unsubscribed(db, subscriber)
+    return _simple_html(
+        "You're unsubscribed",
+        f"<p>{subscriber.email} will no longer receive DORIS notifications.</p>"
+        f"<p>Changed your mind?</p>"
+        f'<a class="btn" href="{_app_base_url()}/ui">Open tracker</a>',
+    )
+
+
+@app.get("/api/unsubscribe")
+async def unsubscribe_get(token: str = Query(...), db: Session = Depends(get_db)):
+    return _do_unsubscribe(token, db)
+
+
+@app.post("/api/unsubscribe")
+async def unsubscribe_post(token: str = Query(...), db: Session = Depends(get_db)):
+    """One-click unsubscribe target for RFC 8058 List-Unsubscribe-Post."""
+    return _do_unsubscribe(token, db)
 
 
 if __name__ == "__main__":

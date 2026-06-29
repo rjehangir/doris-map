@@ -45,6 +45,17 @@
             font-size: 0.85rem; min-width: 44px; min-height: 44px;
         }
         .top-bar button:hover { background: rgba(65, 185, 195, 0.35); }
+        .top-bar .vehicle-filter {
+            background: rgba(14, 36, 70, 0.6); color: #FFF8A7;
+            border: 1px solid rgba(65, 185, 195, 0.3); border-radius: 6px;
+            padding: 0 10px; font-size: 0.82rem;
+            min-height: 40px; height: 40px;
+            font-family: 'Montserrat', sans-serif;
+            max-width: 160px;
+        }
+        @media (min-width: 480px) {
+            .top-bar .vehicle-filter { max-width: 220px; }
+        }
 
         /* Detail bar */
         .detail-bar {
@@ -109,6 +120,7 @@
         .telem-item .tu { color: #96EEF2; font-weight: 400; }
         .telem-item.leak-yes svg { fill: #DD2C1D; }
         .telem-item.leak-yes .tv { color: #DD2C1D; }
+        .telem-item.batt-low svg { fill: #FF9937; }
 
         .detail-track {
             padding: 1px 10px 4px; font-size: 0.66rem; color: rgba(65, 185, 195, 0.6);
@@ -189,6 +201,51 @@
             animation: live-glow 1.5s ease-in-out infinite;
             border-radius: 12px;
         }
+        .marker-depth {
+            margin-top: 2px;
+            font-size: 9px; font-weight: 600;
+            color: #FFF8A7; line-height: 1;
+            padding: 1px 4px; border-radius: 4px;
+            background: rgba(14, 36, 70, 0.75);
+            border: 1px solid rgba(65, 185, 195, 0.35);
+            white-space: nowrap; pointer-events: none;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.6);
+        }
+
+        /* Falkor (too) ship marker */
+        .falkor-marker { position: relative; width: 36px; height: 36px; transform: translate(-50%, -50%); }
+        .falkor-heading-ring { position: absolute; inset: 0; pointer-events: none; }
+        .falkor-heading-ring::before {
+            content: ''; position: absolute; top: -3px; left: 50%;
+            transform: translateX(-50%);
+            width: 0; height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-bottom: 9px solid #fff;
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45));
+        }
+        .falkor-body {
+            position: absolute; inset: 4px; border-radius: 50%;
+            background: linear-gradient(135deg, #a78bfa, #7c3aed);
+            border: 2px solid #fff;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.4);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .falkor-body svg { width: 18px; height: 18px; fill: #fff; }
+
+        .falkor-popup .leaflet-popup-content-wrapper {
+            background: rgba(14, 36, 70, 0.95); color: #96EEF2; border-radius: 8px;
+            border: 1px solid rgba(167, 139, 250, 0.4);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+        }
+        .falkor-popup .leaflet-popup-content { margin: 10px 12px; font-size: 0.82rem; line-height: 1.45; }
+        .falkor-popup .leaflet-popup-tip { background: rgba(14, 36, 70, 0.95); }
+        .falkor-popup .leaflet-popup-close-button { color: #96EEF2 !important; }
+        .falkor-popup b { color: #fff; font-family: 'Montserrat', sans-serif; }
+        .falkor-popup .falkor-row { color: #FFF8A7; font-variant-numeric: tabular-nums; }
+        .falkor-popup .falkor-meta { color: rgba(150, 238, 242, 0.7); font-size: 0.74rem; margin-top: 4px; }
+        .falkor-popup a { color: #a78bfa; text-decoration: none; }
+        .falkor-popup a:hover { text-decoration: underline; }
 
         /* Depth popup */
         .depth-popup .leaflet-popup-content-wrapper {
@@ -420,6 +477,66 @@
         }
 
         .hidden { display: none !important; }
+
+        /* Subscribe / manage modals */
+        .modal-field input[type="email"],
+        .modal-field input[type="text"],
+        .modal-field input[type="number"] {
+            width: 100%; padding: 10px; border-radius: 8px;
+            border: 1px solid rgba(65, 185, 195, 0.3); font-size: 0.9rem;
+            background: rgba(14, 36, 70, 0.5); color: #96EEF2;
+        }
+        .modal-field input:focus { outline: 2px solid #41B9C3; }
+        .modal-field .checkbox-row {
+            display: flex; align-items: flex-start; gap: 10px;
+            color: #96EEF2; font-size: 0.85rem; margin: 6px 0;
+            line-height: 1.35;
+        }
+        .modal-field .checkbox-row input[type="checkbox"] {
+            width: 18px; height: 18px; min-width: 18px; flex: 0 0 18px;
+            margin: 1px 0 0; accent-color: #41B9C3; -webkit-appearance: checkbox;
+        }
+        .modal-field .help-text { font-size: 0.72rem; color: rgba(150, 238, 242, 0.65); margin-top: 4px; line-height: 1.4; }
+        .modal-card .modal-status {
+            margin-top: 10px; padding: 10px; border-radius: 8px;
+            background: rgba(65, 185, 195, 0.15); color: #FFF8A7;
+            font-size: 0.82rem; line-height: 1.4;
+        }
+        .modal-card .modal-status.error { background: rgba(221, 44, 29, 0.18); color: #FFD7D2; }
+        .subscribe-icon-btn {
+            background: rgba(65, 185, 195, 0.2) !important; color: #96EEF2 !important;
+            border: 1px solid rgba(65, 185, 195, 0.3) !important;
+            padding: 0 12px !important; height: 40px !important; min-height: 40px !important;
+            display: flex; align-items: center; gap: 6px;
+            font-size: 0.78rem;
+        }
+        .subscribe-icon-btn svg { width: 16px; height: 16px; fill: #41B9C3; }
+
+        /* Manage subscriptions list */
+        .manage-list {
+            max-height: 50vh; overflow-y: auto; padding: 4px 2px 8px;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .manage-row {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 10px; border-radius: 8px;
+            background: rgba(14, 36, 70, 0.45);
+            border: 1px solid rgba(65, 185, 195, 0.15);
+            font-size: 0.86rem; color: #96EEF2;
+        }
+        .manage-row.subscribed { border-color: rgba(65, 185, 195, 0.6); }
+        .manage-row input[type="checkbox"] {
+            width: 20px; height: 20px; accent-color: #41B9C3;
+        }
+        .toast {
+            position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
+            background: rgba(14, 36, 70, 0.95); color: #FFF8A7;
+            padding: 10px 16px; border-radius: 8px; font-size: 0.85rem;
+            border: 1px solid rgba(65, 185, 195, 0.4); z-index: 3000;
+            box-shadow: 0 4px 18px rgba(0,0,0,0.4);
+            opacity: 0; transition: opacity 0.25s; pointer-events: none;
+        }
+        .toast.visible { opacity: 1; }
     </style>
 </head>
 <body>
@@ -430,8 +547,15 @@
             <div class="subtitle" id="last-update">Loading...</div>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
+            <select class="vehicle-filter" id="vehicle-filter" onchange="onVehicleFilterChange()" title="Filter map to a single vehicle">
+                <option value="">All vehicles</option>
+            </select>
             <button onclick="openMessagesModal()" title="View all messages" style="display:flex; align-items:center; justify-content:center; padding:0; width:40px; height:40px; min-width:40px; min-height:40px;">
                 <svg viewBox="0 0 24 24" style="width:18px; height:18px; fill:#41B9C3;"><path d="M3 5h18v2H3V5zm0 6h18v2H3v-2zm0 6h18v2H3v-2z"/></svg>
+            </button>
+            <button class="subscribe-icon-btn" onclick="openSubscribeModal(null)" title="Email notifications">
+                <svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6V11c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+                <span>Notify me</span>
             </button>
             <div class="top-bar-logos">
                 <img src="img/BlueRobotics-Thruster-Icon-Blue.png" alt="Blue Robotics">
@@ -477,6 +601,78 @@
     </div>
 </div>
 
+<div class="modal-overlay hidden" id="subscribe-modal" onclick="if(event.target===this)closeSubscribeModal()">
+    <div class="modal-card">
+        <h2 id="subscribe-title">Get email notifications</h2>
+        <p id="subscribe-subtitle">Receive alerts when this DORIS unit reports.</p>
+        <div class="modal-field">
+            <label>Email</label>
+            <input type="email" id="subscribe-email" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="modal-field">
+            <label>What to receive</label>
+            <label class="checkbox-row"><input type="checkbox" id="subscribe-realtime" checked> Real-time (one email per RockBLOCK message)</label>
+            <label class="checkbox-row"><input type="checkbox" id="subscribe-digest"> Periodic digest</label>
+        </div>
+        <div class="modal-field" id="subscribe-digest-fields" style="display:none;">
+            <label>Digest frequency</label>
+            <select id="subscribe-digest-freq">
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+            </select>
+        </div>
+        <div class="modal-field">
+            <label>Real-time frequency</label>
+            <select id="subscribe-throttle">
+                <option value="0">No throttle (every message)</option>
+                <option value="60">At most one per hour</option>
+                <option value="1440">At most one per day</option>
+            </select>
+        </div>
+        <div class="modal-status hidden" id="subscribe-status"></div>
+        <div class="modal-actions">
+            <button onclick="closeSubscribeModal()">Cancel</button>
+            <button class="modal-confirm" id="subscribe-confirm" onclick="submitSubscribe()">Subscribe</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay hidden" id="manage-modal" onclick="if(event.target===this)closeManageModal()">
+    <div class="modal-card" style="max-width:420px;">
+        <h2>Manage DORIS notifications</h2>
+        <p id="manage-subtitle">Choose which units you want to receive notifications for.</p>
+        <div class="manage-list" id="manage-list">
+            <div class="messages-empty" style="padding:14px 0;">Loading...</div>
+        </div>
+        <div class="modal-field" style="margin-top:14px;">
+            <label class="checkbox-row"><input type="checkbox" id="manage-realtime" checked> Real-time emails</label>
+            <label class="checkbox-row"><input type="checkbox" id="manage-digest"> Periodic digest</label>
+            <select id="manage-digest-freq" style="margin-top:6px;">
+                <option value="daily">Daily digest</option>
+                <option value="weekly">Weekly digest</option>
+            </select>
+        </div>
+        <div class="modal-field">
+            <label>Real-time frequency</label>
+            <select id="manage-throttle">
+                <option value="0">No throttle (every message)</option>
+                <option value="60">At most one per hour</option>
+                <option value="1440">At most one per day</option>
+            </select>
+        </div>
+        <div class="modal-status hidden" id="manage-status"></div>
+        <div class="modal-actions">
+            <button onclick="closeManageModal()">Close</button>
+            <button class="modal-confirm" id="manage-save" onclick="saveManage()">Save</button>
+        </div>
+        <div class="modal-actions" style="margin-top:6px;">
+            <button onclick="unsubscribeAll()" style="color:#FFD7D2; border-color:rgba(221,44,29,0.4);">Unsubscribe from everything</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
 <div class="modal-overlay full hidden" id="messages-modal" onclick="if(event.target===this)closeMessagesModal()">
     <div class="modal-card full">
         <div class="messages-header">
@@ -508,7 +704,13 @@ const LIVE_MINUTES = 10;
 const STALE_MINUTES = 60;
 const DIVE_GAP_MINUTES = 30;
 
-let map, markersLayer, trackLayer, lineLayer, highlightLayer;
+// R/V Falkor (too) — public Schmidt Ocean Institute feed (1-min cadence)
+// Powers https://soi-vessel-tracker.web.app — no auth required.
+const FALKOR_POLL_MS = 60000;
+const FALKOR_URL = 'https://soi-vessel-tracker-default-rtdb.firebaseio.com/FKt1/users.json?orderBy=%22%24key%22&limitToLast=1';
+
+let map, markersLayer, trackLayer, lineLayer, highlightLayer, falkorLayer;
+let falkorMarker = null;
 let currentImei = null;
 let devicesData = [];
 let userLatLng = null;
@@ -587,6 +789,7 @@ function initMap() {
     trackLayer = L.layerGroup().addTo(map);
     lineLayer = L.layerGroup().addTo(map);
     highlightLayer = L.layerGroup().addTo(map);
+    falkorLayer = L.layerGroup().addTo(map);
 
     map.on('click', onMapClick);
     map.on('moveend', saveMapView);
@@ -946,54 +1149,65 @@ function distanceFromUser(lat, lon) {
 
 // ── Markers ──
 
-function markerColorForAge(device) {
-    const msg = device.latest_message || (device.created_at ? device : null);
-    const ts = msg ? (msg.created_at || null) : null;
-    const age = ageMinutes(ts);
-
-    if (age > STALE_MINUTES) return '#9ca3af';
-    if (!device.latest_message) return '#9ca3af';
-    if (device.latest_message.leak_detected) return '#DD2C1D';
-    if (device.latest_message.battery_voltage != null && device.latest_message.battery_voltage < LOW_VOLTAGE_THRESHOLD) return '#FF9937';
-    return '#22c55e';
+function deviceStatus(device) {
+    const msg = device && device.latest_message;
+    if (!msg) {
+        return { color: '#9ca3af', statusClass: 'status-gray', age: Infinity, isLive: false, isStale: true };
+    }
+    const age = ageMinutes(msg.created_at);
+    const isStale = age > STALE_MINUTES;
+    const isLive = age <= LIVE_MINUTES;
+    if (isStale) {
+        return { color: '#9ca3af', statusClass: 'status-gray', age, isLive: false, isStale: true };
+    }
+    if (msg.leak_detected) {
+        return { color: '#DD2C1D', statusClass: 'status-red', age, isLive, isStale };
+    }
+    if (msg.battery_voltage != null && msg.battery_voltage < LOW_VOLTAGE_THRESHOLD) {
+        return { color: '#FF9937', statusClass: 'status-amber', age, isLive, isStale };
+    }
+    return { color: '#22c55e', statusClass: 'status-green', age, isLive, isStale };
 }
 
-function getStatusClass(device) {
-    if (!device.latest_message) return 'status-gray';
-    const age = ageMinutes(device.latest_message.created_at);
-    if (age > STALE_MINUTES) return 'status-gray';
-    if (device.latest_message.leak_detected) return 'status-red';
-    if (device.latest_message.battery_voltage != null && device.latest_message.battery_voltage < LOW_VOLTAGE_THRESHOLD) return 'status-amber';
-    return 'status-green';
-}
+function markerColorForAge(device) { return deviceStatus(device).color; }
+function getStatusClass(device) { return deviceStatus(device).statusClass; }
 
-function makeMarkerIcon(color, label, isLive) {
+function makeMarkerIcon(color, label, isLive, depth) {
     const liveClass = isLive ? ' marker-live' : '';
+    const dot = `<div style="position:absolute;top:calc(100% + 6px);left:50%;transform:translate(-50%,-50%);width:8px;height:8px;background:${color};border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>`;
+    const chip = depth == null ? '' : `<div style="position:absolute;top:calc(100% + 6px);left:50%;transform:translateX(-50%);margin-top:10px;"><div class="marker-depth">${Math.round(+depth)}m</div></div>`;
     return L.divIcon({
         className: '',
-        html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%);">
+        html: `<div style="position:relative;display:flex;flex-direction:column;align-items:center;transform:translate(-50%,calc(-100% - 6px));">
             <div class="${liveClass}" style="
                 background:${color}; color:#fff; font-weight:600; font-size:11px;
                 padding:4px 8px; border-radius:12px; white-space:nowrap;
                 box-shadow:0 2px 6px rgba(0,0,0,0.3); border:2px solid #fff;
                 text-align:center; line-height:1.3;
             ">${label}</div>
-            <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid ${color};margin-top:-1px;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.2));"></div>
+            <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid ${color};margin-top:1px;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.2));"></div>
+            ${dot}
+            ${chip}
         </div>`,
         iconSize: [0, 0],
         iconAnchor: [0, 0],
     });
 }
 
-function makeTrackPointIcon(color) {
+function makeTrackPointIcon(color, depth) {
+    const chip = depth == null ? '' : `<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;"><div class="marker-depth">${Math.round(+depth)}m</div></div>`;
     return L.divIcon({
         className: '',
-        html: `<div style="
-            width:8px; height:8px; background:${color}; border-radius:50%;
-            border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,0.3);
-        "></div>`,
-        iconSize: [12, 12],
-        iconAnchor: [6, 6],
+        html: `<div style="position:relative;width:0;height:0;">
+            <div style="
+                width:8px; height:8px; background:${color}; border-radius:50%;
+                border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,0.3);
+                position:absolute; top:0; left:0; transform:translate(-50%,-50%);
+            "></div>
+            ${chip}
+        </div>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
     });
 }
 
@@ -1003,9 +1217,10 @@ function makeSelectedPointIcon() {
         html: `<div class="marker-selected" style="
             width:14px; height:14px; background:#41B9C3; border-radius:50%;
             border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,0.4);
+            transform:translate(-50%,-50%);
         "></div>`,
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
     });
 }
 
@@ -1045,9 +1260,9 @@ function selectPoint(msg, index, messages, device) {
     telem.push(`<span class="telem-item">${ICONS.pin}<span class="tv">${msg.latitude.toFixed(5)}, ${msg.longitude.toFixed(5)}</span></span>`);
     telem.push(`<span class="telem-item">${ICONS.sat}<span class="tv">${msg.satellite_count != null ? msg.satellite_count : '--'}</span></span>`);
 
-    const batColor = msg.battery_voltage != null && msg.battery_voltage < LOW_VOLTAGE_THRESHOLD ? '#FF9937' : '#41B9C3';
+    const battLow = msg.battery_voltage != null && msg.battery_voltage < LOW_VOLTAGE_THRESHOLD;
     const batVal = msg.battery_voltage != null ? msg.battery_voltage.toFixed(2) : '--';
-    telem.push(`<span class="telem-item"><svg viewBox="0 0 24 24" style="fill:${batColor}"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg><span class="tv">${batVal}</span><span class="tu">V</span></span>`);
+    telem.push(`<span class="telem-item${battLow ? ' batt-low' : ''}">${ICONS.bat}<span class="tv">${batVal}</span><span class="tu">V</span></span>`);
 
     telem.push(`<span class="telem-item">${ICONS.depth}<span class="tv">${msg.max_depth != null ? msg.max_depth.toFixed(1) : '--'}</span><span class="tu">m</span></span>`);
 
@@ -1247,10 +1462,8 @@ function renderOverview(devices) {
 
         const lat = d.latest_message.latitude;
         const lon = d.latest_message.longitude;
-        const color = markerColorForAge(d);
-        const age = ageMinutes(d.latest_message.created_at);
-        const isLive = age <= LIVE_MINUTES;
-        const marker = L.marker([lat, lon], { icon: makeMarkerIcon(color, d.name, isLive) });
+        const { color, isLive } = deviceStatus(d);
+        const marker = L.marker([lat, lon], { icon: makeMarkerIcon(color, d.name, isLive, d.latest_message.max_depth) });
         marker.on('click', e => {
             L.DomEvent.stopPropagation(e);
             onMarkerClick(d);
@@ -1305,6 +1518,7 @@ const ICONS = {
     copy: '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>',
     maps: '<svg viewBox="0 0 24 24"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>',
     share: '<svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>',
+    bell: '<svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6V11c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>',
 };
 
 function showBar() {
@@ -1323,13 +1537,14 @@ function hideBar() {
 }
 
 function dismissDetail() {
-    shouldFitBounds = true;
+    shouldFitBounds = false;
     currentImei = null;
     selectedPointIndex = -1;
     selectedLatLng = null;
     currentDiveStarts = [];
     diveStartForMsgIndex = {};
     updateHash();
+    syncTopBarFilter();
     clearDistanceLine();
     highlightLayer.clearLayers();
     directionArrow.classList.remove('visible');
@@ -1352,13 +1567,15 @@ function buildActionButtons(latest, deviceName) {
     return `<button onclick="copyCoords('${coordStr}', this)" title="Copy coordinates">${ICONS.copy}</button>`
         + `<button onclick="window.open('${mapsUrl}', '_blank')" title="Open in Maps">${ICONS.maps}</button>`
         + `<button onclick="shareDevice(this)" title="Share link">${ICONS.share}</button>`
+        + `<button onclick="openSubscribeModal(currentImei)" title="Email notifications">${ICONS.bell}</button>`
         + `<button class="btn-close" onclick="dismissDetail()" title="Close">&times;</button>`;
 }
 
 async function showDetail(imei, targetMessageId = null) {
-    shouldFitBounds = true;
+    shouldFitBounds = false;
     currentImei = imei;
     updateHash();
+    syncTopBarFilter();
     const device = devicesData.find(d => d.imei === imei);
     const name = device ? device.name : imei;
     const msg = device ? device.latest_message : null;
@@ -1488,14 +1705,14 @@ async function renderTrack(messages, device) {
         const color = isLatestMsg ? latestColor : `rgba(100, 100, 180, ${0.4 + 0.6 * pct})`;
 
         if (isLatestMsg) {
-            const mk = L.marker([m.latitude, m.longitude], { icon: makeMarkerIcon(color, name, isLive) });
+            const mk = L.marker([m.latitude, m.longitude], { icon: makeMarkerIcon(color, name, isLive, m.max_depth) });
             mk.on('click', e => {
                 L.DomEvent.stopPropagation(e);
                 selectPoint(m, i, messages, device);
             });
             mk.addTo(markersLayer);
         } else {
-            const mk = L.marker([m.latitude, m.longitude], { icon: makeTrackPointIcon(color) });
+            const mk = L.marker([m.latitude, m.longitude], { icon: makeTrackPointIcon(color, m.max_depth) });
             mk.on('click', e => {
                 L.DomEvent.stopPropagation(e);
                 selectPoint(m, i, messages, device);
@@ -1564,6 +1781,92 @@ async function copyCoords(text, btn) {
     setTimeout(() => { btn.innerHTML = orig; }, 1200);
 }
 
+// ── R/V Falkor (too) ──
+
+const FALKOR_SHIP_SVG = '<svg viewBox="0 0 24 24"><path d="M20 21c-1.39 0-2.78-.47-4-1.32-2.44 1.71-5.56 1.71-8 0C6.78 20.53 5.39 21 4 21H2v2h2c1.38 0 2.74-.35 4-.99 2.52 1.29 5.48 1.29 8 0 1.26.65 2.62.99 4 .99h2v-2h-2zM3.95 19H4c1.6 0 3.02-.88 4-2 .98 1.12 2.4 2 4 2s3.02-.88 4-2c.98 1.12 2.4 2 4 2h.05l1.89-6.68c.08-.26.06-.54-.06-.78s-.34-.42-.6-.5L20 10.62V6c0-1.1-.9-2-2-2h-3V1H9v3H6c-1.1 0-2 .9-2 2v4.62l-1.29.42c-.26.08-.48.26-.6.5s-.15.52-.06.78L3.95 19zM6 6h12v3.97L12 8 6 9.97V6z"/></svg>';
+
+function makeFalkorIcon(heading) {
+    const headingRing = (heading != null && !isNaN(heading))
+        ? `<div class="falkor-heading-ring" style="transform:rotate(${heading}deg);"></div>`
+        : '';
+    return L.divIcon({
+        className: '',
+        html: `<div class="falkor-marker">
+            ${headingRing}
+            <div class="falkor-body">${FALKOR_SHIP_SVG}</div>
+        </div>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+    });
+}
+
+function buildFalkorPopup(loc, updatedAt) {
+    const lat = (+loc.latitude).toFixed(5);
+    const lon = (+loc.longitude).toFixed(5);
+    const speed = loc.speed != null ? (+loc.speed).toFixed(1) : '--';
+    const heading = loc.heading != null ? Math.round(+loc.heading) : null;
+    const air = loc.airtemp != null && loc.airtemp > -100 ? (+loc.airtemp).toFixed(1) : null;
+    const sst = loc.watertemp != null && loc.watertemp > -100 ? (+loc.watertemp).toFixed(1) : null;
+    const wind = loc.truewindspeed != null ? (+loc.truewindspeed).toFixed(1) : null;
+    const windDir = loc.truewinddir != null ? Math.round(+loc.truewinddir) : null;
+    const ago = updatedAt ? moment.utc(updatedAt).local().fromNow() : '';
+    const dist = distanceFromUser(+loc.latitude, +loc.longitude);
+
+    const metBits = [];
+    if (air != null) metBits.push(`Air ${air}°C`);
+    if (sst != null) metBits.push(`SST ${sst}°C`);
+    if (wind != null) metBits.push(`Wind ${wind} kn${windDir != null ? ` ${windDir}°` : ''}`);
+
+    return `<b>R/V Falkor (too)</b><br>
+        <span class="falkor-row">${lat}, ${lon}</span><br>
+        <span class="falkor-row">${speed} kn${heading != null ? ` · ${heading}°` : ''}</span>
+        ${metBits.length ? `<div class="falkor-meta">${metBits.join(' · ')}</div>` : ''}
+        <div class="falkor-meta">${dist ? `${dist} away · ` : ''}Updated ${ago}</div>
+        <div class="falkor-meta"><a href="https://soi-vessel-tracker.web.app/" target="_blank" rel="noopener">SOI live dashboard</a></div>`;
+}
+
+async function pollFalkor() {
+    let payload;
+    try {
+        const resp = await fetch(FALKOR_URL);
+        if (!resp.ok) return;
+        payload = await resp.json();
+    } catch (e) {
+        return;
+    }
+    if (!payload || typeof payload !== 'object') return;
+
+    const keys = Object.keys(payload);
+    if (!keys.length) return;
+    keys.sort();
+    const latest = payload[keys[keys.length - 1]];
+    const loc = latest && latest.FKt_1min_location;
+    if (!loc || loc.latitude == null || loc.longitude == null) return;
+
+    const lat = +loc.latitude;
+    const lon = +loc.longitude;
+    const heading = loc.heading != null ? +loc.heading : null;
+    const updatedAt = loc.influxtime || null;
+
+    if (falkorMarker) {
+        falkorMarker.setLatLng([lat, lon]);
+        falkorMarker.setIcon(makeFalkorIcon(heading));
+        falkorMarker.setPopupContent(buildFalkorPopup(loc, updatedAt));
+    } else {
+        falkorMarker = L.marker([lat, lon], {
+            icon: makeFalkorIcon(heading),
+            zIndexOffset: 800,
+            interactive: true,
+        });
+        falkorMarker.bindPopup(buildFalkorPopup(loc, updatedAt), {
+            className: 'falkor-popup',
+            offset: [0, -16],
+        });
+        falkorMarker.on('click', e => { L.DomEvent.stopPropagation(e); });
+        falkorLayer.addLayer(falkorMarker);
+    }
+}
+
 // ── Polling ──
 
 function updateTimestamp(count) {
@@ -1578,6 +1881,7 @@ function updateTimestamp(count) {
 async function poll() {
     shouldFitBounds = false;
     const devices = await fetchDevices();
+    populateTopBarFilter();
     if (!currentImei) {
         renderOverview(devices);
     } else {
@@ -1621,15 +1925,38 @@ function escapeHtml(s) {
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function populateMessagesFilter() {
-    const sel = document.getElementById('messages-filter');
-    const current = sel.value;
-    const opts = ['<option value="">All vehicles</option>'];
+function populateVehicleFilter(sel, { selected = null, allLabel = 'All vehicles' } = {}) {
+    if (!sel) return;
+    const current = selected != null ? selected : sel.value;
+    const opts = [`<option value="">${allLabel}</option>`];
     devicesData.forEach(d => {
         opts.push(`<option value="${escapeHtml(d.imei)}">${escapeHtml(d.name)}</option>`);
     });
     sel.innerHTML = opts.join('');
-    sel.value = current;
+    sel.value = current || '';
+}
+
+function populateMessagesFilter() {
+    populateVehicleFilter(document.getElementById('messages-filter'));
+}
+
+function populateTopBarFilter() {
+    populateVehicleFilter(document.getElementById('vehicle-filter'), { selected: currentImei });
+}
+
+function syncTopBarFilter() {
+    const sel = document.getElementById('vehicle-filter');
+    if (sel) sel.value = currentImei || '';
+}
+
+function onVehicleFilterChange() {
+    const imei = document.getElementById('vehicle-filter').value || '';
+    if (!imei) {
+        if (currentImei) dismissDetail();
+        return;
+    }
+    if (imei === currentImei) return;
+    showDetail(imei);
 }
 
 function openMessagesModal() {
@@ -1687,7 +2014,6 @@ function renderMessagesTable(messages) {
         body.innerHTML = '<div class="messages-empty">No messages found.</div>';
         return;
     }
-    const linkSvg = '<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>';
     const rows = messages.map(m => {
         const name = escapeHtml(deviceNameForImei(m.device_imei));
         const time = m.created_at ? moment.utc(m.created_at).local().format('MMM D, HH:mm:ss') : '--';
@@ -1723,7 +2049,7 @@ function renderMessagesTable(messages) {
             <td class="col-num">${depCell}</td>
             <td class="col-leak${leakCls}">${leak}</td>
             <td class="col-num">${momsn}</td>
-            <td><span class="row-link" title="Open on map">${linkSvg}</span></td>
+            <td><span class="row-link" title="Open on map">${ICONS.pin}</span></td>
         </tr>`;
     }).join('');
     body.innerHTML = `<table class="messages-table">
@@ -1852,6 +2178,247 @@ function editLocationLabel(td) {
     input.addEventListener('click', e => e.stopPropagation());
 }
 
+// ── Subscriptions ──
+
+let subscribeContextImei = null;
+
+function showToast(msg, ms = 2400) {
+    const el = document.getElementById('toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add('visible');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('visible'), ms);
+}
+
+function openSubscribeModal(imei) {
+    subscribeContextImei = imei || null;
+    const title = document.getElementById('subscribe-title');
+    const subtitle = document.getElementById('subscribe-subtitle');
+    if (imei) {
+        const device = devicesData.find(d => d.imei === imei);
+        const name = device ? device.name : imei;
+        title.textContent = `Subscribe to ${name}`;
+        subtitle.textContent = `Get an email when ${name} reports.`;
+    } else {
+        title.textContent = 'Subscribe to all DORIS units';
+        subtitle.textContent = 'Get an email whenever any DORIS unit reports.';
+    }
+    document.getElementById('subscribe-email').value = '';
+    document.getElementById('subscribe-realtime').checked = true;
+    document.getElementById('subscribe-digest').checked = false;
+    document.getElementById('subscribe-digest-freq').value = 'daily';
+    document.getElementById('subscribe-throttle').value = '0';
+    document.getElementById('subscribe-digest-fields').style.display = 'none';
+    const status = document.getElementById('subscribe-status');
+    status.textContent = '';
+    status.classList.add('hidden');
+    status.classList.remove('error');
+    document.getElementById('subscribe-confirm').disabled = false;
+    document.getElementById('subscribe-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('subscribe-email').focus(), 50);
+}
+
+function closeSubscribeModal() {
+    document.getElementById('subscribe-modal').classList.add('hidden');
+}
+
+document.addEventListener('change', e => {
+    if (e.target && e.target.id === 'subscribe-digest') {
+        document.getElementById('subscribe-digest-fields').style.display =
+            e.target.checked ? 'block' : 'none';
+    }
+});
+
+async function submitSubscribe() {
+    const status = document.getElementById('subscribe-status');
+    const btn = document.getElementById('subscribe-confirm');
+    const email = document.getElementById('subscribe-email').value.trim();
+    const realtime = document.getElementById('subscribe-realtime').checked;
+    const digest = document.getElementById('subscribe-digest').checked;
+    if (!email || !email.includes('@')) {
+        status.textContent = 'Please enter a valid email address.';
+        status.classList.remove('hidden'); status.classList.add('error');
+        return;
+    }
+    if (!realtime && !digest) {
+        status.textContent = 'Pick at least one notification type.';
+        status.classList.remove('hidden'); status.classList.add('error');
+        return;
+    }
+    btn.disabled = true;
+    status.classList.remove('error', 'hidden');
+    status.textContent = 'Sending...';
+    try {
+        const resp = await fetch('/api/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email,
+                imei: subscribeContextImei || 'all',
+                wants_realtime: realtime,
+                wants_digest: digest,
+                digest_frequency: document.getElementById('subscribe-digest-freq').value,
+                realtime_throttle_minutes: parseInt(document.getElementById('subscribe-throttle').value || '0', 10),
+            }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            status.textContent = (data && data.detail) || 'Subscription failed.';
+            status.classList.add('error');
+            btn.disabled = false;
+            return;
+        }
+        if (data.status === 'verify_email_sent') {
+            status.textContent = 'Check your inbox for a confirmation email.';
+        } else {
+            status.textContent = 'You\'re subscribed.';
+        }
+        setTimeout(closeSubscribeModal, 1800);
+    } catch (e) {
+        status.textContent = 'Network error.';
+        status.classList.add('error');
+        btn.disabled = false;
+    }
+}
+
+// ── Manage subscriptions ──
+
+let manageToken = null;
+let manageData = null;
+
+async function openManageModal(token) {
+    manageToken = token;
+    document.getElementById('manage-modal').classList.remove('hidden');
+    const list = document.getElementById('manage-list');
+    list.innerHTML = '<div class="messages-empty" style="padding:14px 0;">Loading...</div>';
+    const status = document.getElementById('manage-status');
+    status.textContent = ''; status.classList.add('hidden'); status.classList.remove('error');
+    try {
+        const resp = await fetch('/api/subscriptions?token=' + encodeURIComponent(token));
+        if (!resp.ok) {
+            list.innerHTML = '<div class="messages-empty" style="padding:14px 0; color:#FFD7D2;">This management link is invalid or expired.</div>';
+            return;
+        }
+        manageData = await resp.json();
+        renderManageList();
+        document.getElementById('manage-subtitle').textContent =
+            `Notifications for ${manageData.email}.`;
+    } catch (e) {
+        list.innerHTML = '<div class="messages-empty" style="padding:14px 0; color:#FFD7D2;">Network error.</div>';
+    }
+}
+
+function closeManageModal() {
+    document.getElementById('manage-modal').classList.add('hidden');
+}
+
+function renderManageList() {
+    const list = document.getElementById('manage-list');
+    if (!manageData) { list.innerHTML = ''; return; }
+
+    const subsByKey = new Map();
+    manageData.subscriptions.forEach(s => {
+        subsByKey.set(s.device_imei == null ? '__all__' : s.device_imei, s);
+    });
+
+    const allSub = subsByKey.get('__all__');
+    let firstSub = manageData.subscriptions[0] || {};
+    document.getElementById('manage-realtime').checked =
+        manageData.subscriptions.length === 0 ? true : !!firstSub.wants_realtime;
+    document.getElementById('manage-digest').checked = !!firstSub.wants_digest;
+    document.getElementById('manage-digest-freq').value = firstSub.digest_frequency || 'daily';
+    const storedThrottle = firstSub.realtime_throttle_minutes ?? 0;
+    const throttleOptions = [0, 60, 1440];
+    const snapped = throttleOptions.reduce(
+        (best, opt) => Math.abs(opt - storedThrottle) < Math.abs(best - storedThrottle) ? opt : best,
+        0
+    );
+    document.getElementById('manage-throttle').value = String(snapped);
+
+    const rows = [];
+    rows.push(`
+        <label class="manage-row ${allSub ? 'subscribed' : ''}">
+            <input type="checkbox" data-imei="__all__" ${allSub ? 'checked' : ''}>
+            <div><div style="font-weight:600; color:#fff;">All units</div>
+            <div style="font-size:0.74rem; color:rgba(150,238,242,0.65);">Includes any future DORIS unit too</div></div>
+        </label>
+    `);
+    devicesData.forEach(d => {
+        const has = subsByKey.has(d.imei);
+        rows.push(`
+            <label class="manage-row ${has ? 'subscribed' : ''}">
+                <input type="checkbox" data-imei="${escapeHtml(d.imei)}" ${has ? 'checked' : ''}>
+                <div><div style="font-weight:600; color:#fff;">${escapeHtml(d.name)}</div>
+                <div style="font-size:0.74rem; color:rgba(150,238,242,0.65);">IMEI ${escapeHtml(d.imei)}</div></div>
+            </label>
+        `);
+    });
+    list.innerHTML = rows.join('');
+}
+
+async function saveManage() {
+    if (!manageToken) return;
+    const realtime = document.getElementById('manage-realtime').checked;
+    const digest = document.getElementById('manage-digest').checked;
+    const freq = document.getElementById('manage-digest-freq').value;
+    const throttle = parseInt(document.getElementById('manage-throttle').value || '0', 10);
+
+    const checks = document.querySelectorAll('#manage-list input[type=checkbox]');
+    const items = [];
+    checks.forEach(c => {
+        if (!c.checked) return;
+        const imei = c.dataset.imei;
+        items.push({
+            device_imei: imei === '__all__' ? null : imei,
+            wants_realtime: realtime,
+            wants_digest: digest,
+            digest_frequency: freq,
+            digest_hour_utc: 13,
+            realtime_throttle_minutes: throttle,
+        });
+    });
+
+    const status = document.getElementById('manage-status');
+    const btn = document.getElementById('manage-save');
+    btn.disabled = true;
+    status.classList.remove('error', 'hidden');
+    status.textContent = 'Saving...';
+    try {
+        const resp = await fetch('/api/subscriptions?token=' + encodeURIComponent(manageToken), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subscriptions: items }),
+        });
+        if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            status.textContent = (data && data.detail) || 'Save failed.';
+            status.classList.add('error');
+            btn.disabled = false;
+            return;
+        }
+        status.textContent = items.length ? 'Saved.' : 'All subscriptions removed.';
+        btn.disabled = false;
+        setTimeout(() => { status.classList.add('hidden'); }, 2000);
+    } catch (e) {
+        status.textContent = 'Network error.';
+        status.classList.add('error');
+        btn.disabled = false;
+    }
+}
+
+async function unsubscribeAll() {
+    if (!manageToken) return;
+    if (!confirm('Stop receiving all DORIS notifications?')) return;
+    try {
+        const resp = await fetch('/api/unsubscribe?token=' + encodeURIComponent(manageToken), { method: 'POST' });
+        if (resp.ok) {
+            showToast('Unsubscribed.');
+            closeManageModal();
+        }
+    } catch (e) {}
+}
+
 // ── Deep Link ──
 
 function parseHash() {
@@ -1865,20 +2432,21 @@ function parseHash() {
     return params;
 }
 
-function updateHash() {
-    if (!currentImei) {
-        history.replaceState(null, '', window.location.pathname);
-        return;
-    }
+function serializeAppState() {
+    if (!currentImei) return '';
     let hash = 'device=' + currentImei;
     if (timeFilterHours !== null) hash += '&tf=' + timeFilterHours;
-    history.replaceState(null, '', window.location.pathname + '#' + hash);
+    return hash;
+}
+
+function updateHash() {
+    const hash = serializeAppState();
+    const url = hash ? window.location.pathname + '#' + hash : window.location.pathname;
+    history.replaceState(null, '', url);
 }
 
 function buildShareUrl() {
-    let url = window.location.origin + '/ui#device=' + currentImei;
-    if (timeFilterHours !== null) url += '&tf=' + timeFilterHours;
-    return url;
+    return window.location.origin + '/ui#' + serializeAppState();
 }
 
 async function shareDevice(btn) {
@@ -1908,6 +2476,7 @@ initMap();
 initGeolocation();
 initWakeLock();
 fetchDevices().then(devices => {
+    populateTopBarFilter();
     renderOverview(devices);
     updateTimestamp();
 
@@ -1924,10 +2493,25 @@ fetchDevices().then(devices => {
     }
     if (hashParams.device) {
         const device = devicesData.find(d => d.imei === hashParams.device);
-        if (device) showDetail(device.imei);
+        if (device) {
+            const targetMsgId = hashParams.msg ? parseInt(hashParams.msg, 10) : null;
+            showDetail(device.imei, Number.isFinite(targetMsgId) ? targetMsgId : null);
+        }
+    }
+    if (hashParams.manage && hashParams.token) {
+        openManageModal(hashParams.token);
+    }
+    if (hashParams.subscribed === 'ok') {
+        showToast('You\'re subscribed!');
+        if (hashParams.token) {
+            setTimeout(() => openManageModal(hashParams.token), 600);
+        }
     }
 });
 setInterval(poll, POLL_INTERVAL_MS);
+
+pollFalkor();
+setInterval(pollFalkor, FALKOR_POLL_MS);
 
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !document.getElementById('messages-modal').classList.contains('hidden')) {

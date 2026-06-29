@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Iterable, Optional
 
@@ -76,11 +77,6 @@ def get_all_devices(db: Session):
 
 def get_device_by_imei(db: Session, imei: str):
     return db.query(models.Device).filter(models.Device.imei == imei).first()
-
-
-def get_device_name(db: Session, imei: str) -> str:
-    device = get_device_by_imei(db, imei)
-    return device.name if device else imei
 
 
 def create_device(db: Session, imei: str, name: str) -> models.Device:
@@ -213,8 +209,7 @@ def delete_dive_start(db: Session, dive_start_id: int) -> bool:
 # ── Location Labels ──
 
 
-def get_location_label(db: Session, lat: float, lon: float) -> Optional[models.LocationLabel]:
-    g_lat, g_lon = geocode.grid(lat, lon)
+def _find_location_label(db: Session, g_lat: float, g_lon: float) -> Optional[models.LocationLabel]:
     return (
         db.query(models.LocationLabel)
         .filter(
@@ -230,14 +225,7 @@ def get_or_create_location_label(
 ) -> models.LocationLabel:
     """Return cached label for the grid cell or fetch from Nominatim and store."""
     g_lat, g_lon = geocode.grid(lat, lon)
-    row = (
-        db.query(models.LocationLabel)
-        .filter(
-            models.LocationLabel.lat_grid == g_lat,
-            models.LocationLabel.lon_grid == g_lon,
-        )
-        .first()
-    )
+    row = _find_location_label(db, g_lat, g_lon)
     if row is not None:
         return row
 
@@ -277,14 +265,7 @@ def set_user_location_label(
     db: Session, lat: float, lon: float, label: str
 ) -> models.LocationLabel:
     g_lat, g_lon = geocode.grid(lat, lon)
-    row = (
-        db.query(models.LocationLabel)
-        .filter(
-            models.LocationLabel.lat_grid == g_lat,
-            models.LocationLabel.lon_grid == g_lon,
-        )
-        .first()
-    )
+    row = _find_location_label(db, g_lat, g_lon)
     now = datetime.now(timezone.utc)
     if row is not None:
         row.label = label
@@ -303,3 +284,161 @@ def set_user_location_label(
     db.refresh(row)
     logger.info(f"User override location label for ({g_lat}, {g_lon}): {label}")
     return row
+
+
+# ── Subscriptions ──
+
+
+def _new_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def _normalize_email(email: str) -> str:
+    return (email or "").strip().lower()
+
+
+def get_subscriber_by_email(db: Session, email: str) -> Optional[models.Subscriber]:
+    return (
+        db.query(models.Subscriber)
+        .filter(models.Subscriber.email == _normalize_email(email))
+        .first()
+    )
+
+
+def get_subscriber_by_manage_token(
+    db: Session, token: str
+) -> Optional[models.Subscriber]:
+    return (
+        db.query(models.Subscriber)
+        .filter(models.Subscriber.manage_token == token)
+        .first()
+    )
+
+
+def get_or_create_subscriber(db: Session, email: str) -> models.Subscriber:
+    sub = get_subscriber_by_email(db, email)
+    if sub:
+        return sub
+    sub = models.Subscriber(
+        email=_normalize_email(email),
+        manage_token=_new_token(),
+    )
+    db.add(sub)
+    db.commit()
+    db.refresh(sub)
+    logger.info(f"Created subscriber id={sub.id} email={sub.email}")
+    return sub
+
+
+def create_verify_token(
+    db: Session, subscriber: models.Subscriber, *, expires_days: int = 7
+) -> models.EmailToken:
+    token = models.EmailToken(
+        subscriber_id=subscriber.id,
+        token=_new_token(),
+        purpose="verify",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=expires_days),
+    )
+    db.add(token)
+    db.commit()
+    db.refresh(token)
+    return token
+
+
+def get_verify_token(db: Session, token: str) -> Optional[models.EmailToken]:
+    return (
+        db.query(models.EmailToken)
+        .filter(
+            models.EmailToken.token == token,
+            models.EmailToken.purpose == "verify",
+        )
+        .first()
+    )
+
+
+def get_unsubscribe_token(db: Session, token: str) -> Optional[models.EmailToken]:
+    return (
+        db.query(models.EmailToken)
+        .filter(
+            models.EmailToken.token == token,
+            models.EmailToken.purpose == "unsubscribe",
+        )
+        .first()
+    )
+
+
+def upsert_subscription(
+    db: Session,
+    subscriber: models.Subscriber,
+    *,
+    device_imei: Optional[str],
+    wants_realtime: bool,
+    wants_digest: bool,
+    digest_frequency: str,
+    digest_hour_utc: int,
+    realtime_throttle_minutes: int,
+) -> models.Subscription:
+    """Insert or update the subscriber's row for this device (or "all")."""
+    row = (
+        db.query(models.Subscription)
+        .filter(
+            models.Subscription.subscriber_id == subscriber.id,
+            models.Subscription.device_imei.is_(None)
+            if device_imei is None
+            else models.Subscription.device_imei == device_imei,
+        )
+        .first()
+    )
+    if row is None:
+        row = models.Subscription(
+            subscriber_id=subscriber.id,
+            device_imei=device_imei,
+        )
+        db.add(row)
+    row.wants_realtime = wants_realtime
+    row.wants_digest = wants_digest
+    row.digest_frequency = digest_frequency if digest_frequency in ("daily", "weekly") else "daily"
+    row.digest_hour_utc = max(0, min(23, digest_hour_utc))
+    row.realtime_throttle_minutes = max(0, realtime_throttle_minutes)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def replace_subscriptions(
+    db: Session,
+    subscriber: models.Subscriber,
+    items: Iterable[schemas.SubscriptionItem],
+) -> list[models.Subscription]:
+    """Replace the subscriber's whole subscription set with ``items``."""
+    db.query(models.Subscription).filter(
+        models.Subscription.subscriber_id == subscriber.id
+    ).delete()
+    result: list[models.Subscription] = []
+    seen_keys: set[Optional[str]] = set()
+    for item in items:
+        key = item.device_imei
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        row = models.Subscription(
+            subscriber_id=subscriber.id,
+            device_imei=key,
+            wants_realtime=item.wants_realtime,
+            wants_digest=item.wants_digest,
+            digest_frequency=item.digest_frequency
+            if item.digest_frequency in ("daily", "weekly")
+            else "daily",
+            digest_hour_utc=max(0, min(23, item.digest_hour_utc)),
+            realtime_throttle_minutes=max(0, item.realtime_throttle_minutes),
+        )
+        db.add(row)
+        result.append(row)
+    db.commit()
+    return result
+
+
+def mark_unsubscribed(db: Session, subscriber: models.Subscriber) -> None:
+    subscriber.unsubscribed_at = datetime.now(timezone.utc)
+    db.commit()
+    logger.info(f"Subscriber id={subscriber.id} ({subscriber.email}) unsubscribed")
