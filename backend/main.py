@@ -51,6 +51,7 @@ from schemas import (
     GeocodeBatchRequest,
     GeocodeOverrideRequest,
     LocationLabelResponse,
+    ManageLinkRequest,
     SubscribeRequest,
     SubscriptionItem,
     SubscriptionsResponse,
@@ -493,6 +494,31 @@ async def manage_redirect(token: str = Query(...), db: Session = Depends(get_db)
         url=f"{_app_base_url()}/ui#manage=1&token={token}",
         status_code=302,
     )
+
+
+@app.post("/api/manage-link")
+async def request_manage_link(
+    body: ManageLinkRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Email the manage link to an existing verified subscriber.
+
+    Always returns the same generic response so callers can't enumerate which
+    email addresses are subscribed.
+    """
+    if not _is_valid_email(body.email):
+        raise HTTPException(status_code=400, detail="invalid email")
+
+    subscriber = get_subscriber_by_email(db, body.email.strip())
+    if (
+        subscriber
+        and subscriber.verified_at is not None
+        and subscriber.unsubscribed_at is None
+    ):
+        background_tasks.add_task(email_service.send_manage_link, subscriber)
+
+    return {"status": "ok"}
 
 
 @app.get("/api/subscriptions")

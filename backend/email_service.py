@@ -186,3 +186,30 @@ def send_unsubscribed_confirmation(subscriber: models.Subscriber) -> bool:
         subscriber=subscriber, base_url=_app_base_url()
     )
     return _post(subscriber.email, subject, html, text)
+
+
+def send_manage_link(subscriber: models.Subscriber) -> bool:
+    """Send an existing verified subscriber a link to manage their preferences."""
+    base = _app_base_url()
+    manage_url = f"{base}/api/manage?token={subscriber.manage_token}"
+    subject = "Manage your DORIS Tracker notifications"
+    text = (
+        f"Hi,\n\n"
+        f"You (or someone with this email address) requested a link to manage "
+        f"your DORIS Tracker email notifications.\n\n"
+        f"Open this link to change or cancel your preferences:\n{manage_url}\n\n"
+        f"If you did not request this, you can safely ignore this email.\n"
+    )
+    html = (
+        f"<p>Hi,</p>"
+        f"<p>You (or someone with this email address) requested a link to "
+        f"manage your DORIS Tracker email notifications.</p>"
+        f'<p><a href="{manage_url}" style="display:inline-block;padding:10px 16px;'
+        f"background:#187D8B;color:#fff;text-decoration:none;border-radius:6px;"
+        f'font-weight:600;">Manage my notifications</a></p>'
+        f'<p style="font-size:12px;color:#666;">Or copy this URL: '
+        f'<a href="{manage_url}">{manage_url}</a></p>'
+        f'<p style="font-size:12px;color:#666;">If you did not request this, '
+        f"you can safely ignore this email.</p>"
+    )
+    return _post(subscriber.email, subject, html, text)

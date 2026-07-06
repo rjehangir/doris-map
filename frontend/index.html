@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>DORIS Tracker</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" />
@@ -22,17 +22,26 @@
         .top-bar {
             background: rgba(14, 36, 70, 0.95); color: #fff; padding: 8px 12px;
             display: flex; align-items: center; justify-content: space-between;
+            gap: 10px;
             z-index: 1001; min-height: 44px;
             backdrop-filter: blur(8px); border-bottom: 1px solid rgba(65, 185, 195, 0.2);
         }
-        .top-bar h1 { font-size: 1rem; font-weight: 600; margin: 0; }
-        .top-bar .subtitle { font-size: 0.72rem; color: rgba(150, 238, 242, 0.7); }
+        .top-bar-title { min-width: 0; flex: 1 1 auto; }
+        .top-bar-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .top-bar h1 {
+            font-size: 1rem; font-weight: 600; margin: 0;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .top-bar .subtitle {
+            font-size: 0.72rem; color: rgba(150, 238, 242, 0.7);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
         .top-bar .subtitle a { color: #96EEF2; text-decoration: none; }
-        .top-bar .subtitle a:active { text-decoration: underline; }
+        .top-bar .subtitle a:hover, .top-bar .subtitle a:active { text-decoration: underline; }
         .top-bar-logos {
             display: none; align-items: center; gap: 8px;
         }
-        @media (min-width: 480px) {
+        @media (min-width: 640px) {
             .top-bar-logos { display: flex; }
         }
         .top-bar-logos img {
@@ -43,8 +52,12 @@
             background: rgba(65, 185, 195, 0.2); border: none; color: #fff;
             padding: 8px 14px; border-radius: 6px; cursor: pointer;
             font-size: 0.85rem; min-width: 44px; min-height: 44px;
+            white-space: nowrap;
         }
         .top-bar button:hover { background: rgba(65, 185, 195, 0.35); }
+        /* Hide the header vehicle filter when the map-native filter is available.
+           JS toggles .use-map-vehicle-filter on <body> when the map control mounts. */
+        body.use-map-vehicle-filter .top-bar .vehicle-filter { display: none; }
         .top-bar .vehicle-filter {
             background: rgba(14, 36, 70, 0.6); color: #FFF8A7;
             border: 1px solid rgba(65, 185, 195, 0.3); border-radius: 6px;
@@ -55,6 +68,14 @@
         }
         @media (min-width: 480px) {
             .top-bar .vehicle-filter { max-width: 220px; }
+        }
+        /* On narrow screens collapse "Notify me" to icon-only */
+        @media (max-width: 479px) {
+            .subscribe-icon-btn span { display: none; }
+            .subscribe-icon-btn {
+                padding: 0 !important; width: 44px !important;
+                justify-content: center;
+            }
         }
 
         /* Detail bar */
@@ -281,8 +302,12 @@
         }
         .time-filter-control button {
             background: none; border: none; cursor: pointer;
-            padding: 4px 7px; border-radius: 5px; font-size: 0.68rem;
+            padding: 8px 10px; border-radius: 5px; font-size: 0.75rem;
             font-weight: 600; color: #96EEF2; white-space: nowrap;
+            min-height: 32px;
+        }
+        @media (max-width: 479px) {
+            .time-filter-control button { padding: 8px 8px; font-size: 0.72rem; }
         }
         .time-filter-control button:hover { background: rgba(65, 185, 195, 0.2); }
         .time-filter-control button.active { background: linear-gradient(135deg, #41B9C3, #187D8B); color: #fff; }
@@ -318,7 +343,7 @@
         .modal-card h2 { font-size: 1.05rem; margin-bottom: 8px; color: #fff; }
         .modal-card p { font-size: 0.82rem; color: #96EEF2; line-height: 1.5; margin-bottom: 14px; }
         .modal-field { margin-bottom: 12px; }
-        .modal-field label { display: block; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: #41B9C3; letter-spacing: 0.4px; margin-bottom: 4px; }
+        .modal-field > label:not(.checkbox-row) { display: block; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: #41B9C3; letter-spacing: 0.4px; margin-bottom: 4px; }
         .modal-field select {
             width: 100%; padding: 10px; border-radius: 8px;
             border: 1px solid rgba(65, 185, 195, 0.3); font-size: 0.9rem;
@@ -537,26 +562,186 @@
             opacity: 0; transition: opacity 0.25s; pointer-events: none;
         }
         .toast.visible { opacity: 1; }
+
+        /* Global focus visibility (item 8) */
+        button:focus-visible,
+        select:focus-visible,
+        [role="menuitem"]:focus-visible,
+        .leaflet-control-zoom a:focus-visible,
+        .time-filter-control button:focus-visible {
+            outline: 2px solid #96EEF2 !important;
+            outline-offset: 2px;
+        }
+
+        /* Keep attribution clear of the locate/dive FABs (item 6) */
+        .leaflet-control-attribution {
+            margin-right: 68px !important;
+            max-width: calc(100vw - 88px);
+        }
+
+        /* Top-bar menu (item 9) */
+        .top-bar-menu-wrap { position: relative; }
+        .top-bar-menu-btn {
+            display: flex; align-items: center; justify-content: center;
+            padding: 0 !important; width: 40px !important; min-width: 40px !important;
+            height: 40px !important; min-height: 40px !important;
+        }
+        .top-bar-menu {
+            position: absolute; top: calc(100% + 6px); right: 0;
+            background: rgba(14, 36, 70, 0.97);
+            border: 1px solid rgba(65, 185, 195, 0.3);
+            border-radius: 10px; padding: 6px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            backdrop-filter: blur(8px);
+            min-width: 220px; z-index: 1500;
+            display: flex; flex-direction: column; gap: 2px;
+        }
+        .top-bar-menu button[role="menuitem"] {
+            display: flex; align-items: center; gap: 10px;
+            width: 100%; text-align: left; background: none; border: none;
+            color: #96EEF2; padding: 10px 12px; border-radius: 6px;
+            font-size: 0.88rem; font-weight: 500; cursor: pointer;
+            font-family: 'Montserrat', sans-serif; white-space: nowrap;
+            min-height: 40px; min-width: 0;
+        }
+        .top-bar-menu button[role="menuitem"]:hover,
+        .top-bar-menu button[role="menuitem"]:focus-visible {
+            background: rgba(65, 185, 195, 0.18); color: #fff;
+        }
+        .top-bar-menu button[role="menuitem"] svg {
+            width: 16px; height: 16px; fill: #41B9C3; flex-shrink: 0;
+        }
+
+        /* Map-native vehicle filter (item 12) */
+        .vehicle-filter-control {
+            background: rgba(14, 36, 70, 0.92);
+            border: 1px solid rgba(65, 185, 195, 0.2);
+            border-radius: 8px; padding: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        .vehicle-filter-control select {
+            background: transparent; color: #FFF8A7;
+            border: none; border-radius: 6px;
+            padding: 6px 8px; font-size: 0.82rem;
+            font-family: 'Montserrat', sans-serif;
+            min-height: 32px; outline: none;
+            max-width: 200px;
+        }
+        .vehicle-filter-control select option {
+            background: #0E2446; color: #FFF8A7;
+        }
+
+        /* Log Dive Start floating action button (item 13) */
+        .dive-fab {
+            position: fixed; z-index: 1001;
+            right: 12px; bottom: 72px;
+            display: flex; align-items: center; gap: 8px;
+            padding: 0 14px 0 12px; height: 44px; border-radius: 22px;
+            background: rgba(0, 77, 100, 0.92);
+            border: 1px solid rgba(65, 185, 195, 0.35);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+            color: #96EEF2; font-family: 'Montserrat', sans-serif;
+            font-size: 0.85rem; font-weight: 600; cursor: pointer;
+            transition: bottom 0.28s cubic-bezier(0.25,0.46,0.45,0.94), background 0.15s;
+        }
+        .dive-fab svg { width: 18px; height: 18px; fill: #41B9C3; flex-shrink: 0; }
+        .dive-fab:hover { background: rgba(65, 185, 195, 0.25); color: #fff; }
+        .dive-fab:active { background: rgba(65, 185, 195, 0.35); }
+        @media (max-width: 479px) {
+            .dive-fab { padding: 0; width: 44px; justify-content: center; }
+            .dive-fab .dive-fab-label { display: none; }
+        }
+
+        /* Messages modal — card layout below 700px (item 11) */
+        @media (max-width: 700px) {
+            .messages-table thead { display: none; }
+            .messages-table,
+            .messages-table tbody,
+            .messages-table tr,
+            .messages-table td { display: block; width: 100%; }
+            .messages-table tbody tr {
+                background: rgba(14, 36, 70, 0.55);
+                border: 1px solid rgba(65, 185, 195, 0.15);
+                border-radius: 10px;
+                margin: 10px 12px;
+                padding: 12px 14px 12px 14px;
+                position: relative;
+            }
+            .messages-table td {
+                padding: 3px 0; border: none; white-space: normal;
+                font-size: 0.8rem;
+            }
+            .messages-table td[data-col]::before {
+                content: attr(data-col);
+                display: inline-block; width: 78px;
+                color: rgba(150, 238, 242, 0.55);
+                font-size: 0.68rem; font-weight: 600;
+                text-transform: uppercase; letter-spacing: 0.4px;
+                vertical-align: baseline;
+            }
+            /* First two rows (Time + Vehicle) act as the card header */
+            .messages-table td:nth-child(1) {
+                font-size: 0.72rem;
+                color: rgba(150, 238, 242, 0.65);
+                padding: 0 0 2px; margin: 0;
+            }
+            .messages-table td:nth-child(1)::before { display: none; }
+            .messages-table td:nth-child(2) {
+                font-size: 1rem; font-weight: 600; color: #fff;
+                padding: 0 0 8px; margin: 0 0 6px;
+                border-bottom: 1px solid rgba(65, 185, 195, 0.12);
+            }
+            .messages-table td:nth-child(2)::before { display: none; }
+            .messages-table td.col-location { max-width: none; }
+            .messages-table td.col-num { text-align: left; }
+            .messages-table .row-link {
+                position: absolute; top: 12px; right: 12px;
+                width: 32px; height: 32px;
+                display: inline-flex; align-items: center; justify-content: center;
+                background: rgba(65, 185, 195, 0.15); border-radius: 6px;
+            }
+            .messages-table td.col-leak.leak-yes {
+                display: inline-block; padding: 2px 8px;
+                background: rgba(221, 44, 29, 0.2);
+                border-radius: 4px; color: #FFD7D2;
+            }
+        }
     </style>
 </head>
 <body>
 <div id="app">
     <div class="top-bar">
-        <div>
+        <div class="top-bar-title">
             <h1>DORIS Tracker</h1>
             <div class="subtitle" id="last-update">Loading...</div>
         </div>
-        <div style="display:flex; align-items:center; gap:8px;">
+        <div class="top-bar-actions">
             <select class="vehicle-filter" id="vehicle-filter" onchange="onVehicleFilterChange()" title="Filter map to a single vehicle">
                 <option value="">All vehicles</option>
             </select>
-            <button onclick="openMessagesModal()" title="View all messages" style="display:flex; align-items:center; justify-content:center; padding:0; width:40px; height:40px; min-width:40px; min-height:40px;">
-                <svg viewBox="0 0 24 24" style="width:18px; height:18px; fill:#41B9C3;"><path d="M3 5h18v2H3V5zm0 6h18v2H3v-2zm0 6h18v2H3v-2z"/></svg>
-            </button>
             <button class="subscribe-icon-btn" onclick="openSubscribeModal(null)" title="Email notifications">
                 <svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6V11c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
                 <span>Notify me</span>
             </button>
+            <div class="top-bar-menu-wrap">
+                <button class="top-bar-menu-btn" id="top-bar-menu-btn" onclick="toggleTopBarMenu(event)" aria-haspopup="menu" aria-expanded="false" title="Menu">
+                    <svg viewBox="0 0 24 24" style="width:18px; height:18px; fill:#41B9C3;"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm0 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm0 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>
+                </button>
+                <div class="top-bar-menu hidden" id="top-bar-menu" role="menu">
+                    <button role="menuitem" onclick="closeTopBarMenu();openMessagesModal()">
+                        <svg viewBox="0 0 24 24"><path d="M3 5h18v2H3V5zm0 6h18v2H3v-2zm0 6h18v2H3v-2z"/></svg>
+                        View all messages
+                    </button>
+                    <button role="menuitem" onclick="closeTopBarMenu();openManageLinkPrompt()">
+                        <svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm0-6 2 2h6v14H4V4h6l2-2Z"/></svg>
+                        Manage notifications
+                    </button>
+                    <button role="menuitem" onclick="closeTopBarMenu();openAboutModal()">
+                        <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-6h2v6Zm0-8h-2V7h2v2Z"/></svg>
+                        About
+                    </button>
+                </div>
+            </div>
             <div class="top-bar-logos">
                 <img src="img/BlueRobotics-Thruster-Icon-Blue.png" alt="Blue Robotics">
                 <img src="img/odl-logo-circle.png" alt="ODL">
@@ -667,6 +852,37 @@
         </div>
         <div class="modal-actions" style="margin-top:6px;">
             <button onclick="unsubscribeAll()" style="color:#FFD7D2; border-color:rgba(221,44,29,0.4);">Unsubscribe from everything</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay hidden" id="manage-link-modal" onclick="if(event.target===this)closeManageLinkModal()">
+    <div class="modal-card">
+        <h2>Manage notifications</h2>
+        <p>Enter the email you subscribed with. We'll send you a link to change or cancel your notifications.</p>
+        <div class="modal-field">
+            <label>Email</label>
+            <input type="email" id="manage-link-email" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="modal-status hidden" id="manage-link-status"></div>
+        <div class="modal-actions">
+            <button onclick="closeManageLinkModal()">Cancel</button>
+            <button class="modal-confirm" id="manage-link-confirm" onclick="submitManageLink()">Email me a link</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay hidden" id="about-modal" onclick="if(event.target===this)closeAboutModal()">
+    <div class="modal-card">
+        <h2>About DORIS Tracker</h2>
+        <p>Multi-device camera tracking via Iridium / RockBLOCK satellite messaging. DORIS units report GPS, telemetry, and leak status when they surface; positions and history appear on the map.</p>
+        <p style="display:flex; align-items:center; gap:14px; margin-top:14px;">
+            <img src="img/BlueRobotics-Thruster-Icon-Blue.png" alt="Blue Robotics" style="width:36px; height:36px; border-radius:50%;">
+            <img src="img/odl-logo-circle.png" alt="ODL" style="width:36px; height:36px; border-radius:50%;">
+            <span style="color:rgba(150,238,242,0.75); font-size:0.78rem;">Built with Blue Robotics &amp; ODL.</span>
+        </p>
+        <div class="modal-actions">
+            <button class="modal-confirm" onclick="closeAboutModal()">Close</button>
         </div>
     </div>
 </div>
@@ -782,6 +998,7 @@ function initMap() {
 
     L.control.zoom({ position: 'topleft' }).addTo(map);
 
+    initVehicleFilterControl();
     initTimeFilterControl();
     initDiveStartControl();
 
@@ -901,22 +1118,46 @@ async function onTimeFilterChange() {
     }
 }
 
-// ── Dive Start Control + Dialog ──
+// ── Dive Start FAB + Dialog ──
 
 function initDiveStartControl() {
-    const DiveControl = L.Control.extend({
-        options: { position: 'topright' },
+    if (document.getElementById('dive-fab')) return;
+    const btn = document.createElement('button');
+    btn.className = 'dive-fab';
+    btn.id = 'dive-fab';
+    btn.type = 'button';
+    btn.title = 'Log Dive Start';
+    btn.setAttribute('aria-label', 'Log Dive Start');
+    btn.innerHTML = `
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
+        <span class="dive-fab-label">Log Dive Start</span>
+    `;
+    btn.addEventListener('click', showDiveStartDialog);
+    document.body.appendChild(btn);
+}
+
+// ── Vehicle filter map control (item 12) ──
+
+function initVehicleFilterControl() {
+    const FilterControl = L.Control.extend({
+        options: { position: 'topleft' },
         onAdd() {
-            const container = L.DomUtil.create('div', 'dive-start-control');
+            const container = L.DomUtil.create('div', 'vehicle-filter-control');
             L.DomEvent.disableClickPropagation(container);
-            container.innerHTML = `<button onclick="showDiveStartDialog()">
-                <svg viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
-                Log Dive Start
-            </button>`;
+            L.DomEvent.disableScrollPropagation(container);
+            const sel = L.DomUtil.create('select', '', container);
+            sel.id = 'vehicle-filter-map';
+            sel.title = 'Filter map to a single vehicle';
+            sel.setAttribute('aria-label', 'Filter map to a single vehicle');
+            const opt = L.DomUtil.create('option', '', sel);
+            opt.value = '';
+            opt.textContent = 'All vehicles';
+            sel.addEventListener('change', onVehicleFilterChange);
             return container;
         }
     });
-    new DiveControl().addTo(map);
+    new FilterControl().addTo(map);
+    document.body.classList.add('use-map-vehicle-filter');
 }
 
 function showDiveStartDialog() {
@@ -1940,17 +2181,27 @@ function populateMessagesFilter() {
     populateVehicleFilter(document.getElementById('messages-filter'));
 }
 
+function getVehicleFilterEls() {
+    return [
+        document.getElementById('vehicle-filter'),
+        document.getElementById('vehicle-filter-map'),
+    ].filter(Boolean);
+}
+
 function populateTopBarFilter() {
-    populateVehicleFilter(document.getElementById('vehicle-filter'), { selected: currentImei });
+    getVehicleFilterEls().forEach(el =>
+        populateVehicleFilter(el, { selected: currentImei })
+    );
 }
 
 function syncTopBarFilter() {
-    const sel = document.getElementById('vehicle-filter');
-    if (sel) sel.value = currentImei || '';
+    getVehicleFilterEls().forEach(el => { el.value = currentImei || ''; });
 }
 
-function onVehicleFilterChange() {
-    const imei = document.getElementById('vehicle-filter').value || '';
+function onVehicleFilterChange(ev) {
+    const src = (ev && ev.target) || document.getElementById('vehicle-filter-map') || document.getElementById('vehicle-filter');
+    const imei = (src && src.value) || '';
+    getVehicleFilterEls().forEach(el => { if (el !== src) el.value = imei; });
     if (!imei) {
         if (currentImei) dismissDetail();
         return;
@@ -2032,23 +2283,23 @@ function renderMessagesTable(messages) {
         const leak = m.leak_detected ? 'LEAK' : 'OK';
         const momsn = m.momsn != null ? m.momsn : '--';
         const locCell = (m.latitude != null && m.longitude != null)
-            ? `<td class="col-location" data-lat="${m.latitude}" data-lon="${m.longitude}" title="Tap to override" onclick="event.stopPropagation();editLocationLabel(this)"><span class="loc-text">…</span></td>`
-            : `<td class="col-location">--</td>`;
+            ? `<td class="col-location" data-col="Location" data-lat="${m.latitude}" data-lon="${m.longitude}" title="Tap to override" onclick="event.stopPropagation();editLocationLabel(this)"><span class="loc-text">…</span></td>`
+            : `<td class="col-location" data-col="Location">--</td>`;
         const batCell = m.battery_voltage != null
             ? `${bat}<span class="col-unit">V</span>` : '--';
         const depCell = m.max_depth != null
             ? `${dep}<span class="col-unit">m</span>` : '--';
         return `<tr onclick="openMessageOnMap('${escapeHtml(m.device_imei)}', ${m.id})">
-            <td>${time}</td>
-            <td class="col-name">${name}</td>
+            <td data-col="Time">${time}</td>
+            <td class="col-name" data-col="Vehicle">${name}</td>
             ${locCell}
-            <td class="col-coord">${lat}, ${lon}</td>
-            <td class="col-coord">${iridiumCell}</td>
-            <td class="col-num">${sat}</td>
-            <td class="col-num">${batCell}</td>
-            <td class="col-num">${depCell}</td>
-            <td class="col-leak${leakCls}">${leak}</td>
-            <td class="col-num">${momsn}</td>
+            <td class="col-coord" data-col="GPS">${lat}, ${lon}</td>
+            <td class="col-coord" data-col="Iridium">${iridiumCell}</td>
+            <td class="col-num" data-col="Sat">${sat}</td>
+            <td class="col-num" data-col="Battery">${batCell}</td>
+            <td class="col-num" data-col="Depth">${depCell}</td>
+            <td class="col-leak${leakCls}" data-col="Leak">${leak}</td>
+            <td class="col-num" data-col="MOMSN">${momsn}</td>
             <td><span class="row-link" title="Open on map">${ICONS.pin}</span></td>
         </tr>`;
     }).join('');
@@ -2189,6 +2440,114 @@ function showToast(msg, ms = 2400) {
     el.classList.add('visible');
     clearTimeout(el._t);
     el._t = setTimeout(() => el.classList.remove('visible'), ms);
+}
+
+// ── Top-bar menu (item 9) ──
+
+function toggleTopBarMenu(ev) {
+    if (ev) ev.stopPropagation();
+    const menu = document.getElementById('top-bar-menu');
+    const btn = document.getElementById('top-bar-menu-btn');
+    if (!menu || !btn) return;
+    const wasOpen = !menu.classList.contains('hidden');
+    if (wasOpen) {
+        closeTopBarMenu();
+    } else {
+        menu.classList.remove('hidden');
+        btn.setAttribute('aria-expanded', 'true');
+        setTimeout(() => {
+            document.addEventListener('click', outsideCloseTopBarMenu);
+            document.addEventListener('keydown', escCloseTopBarMenu);
+        }, 0);
+    }
+}
+
+function closeTopBarMenu() {
+    const menu = document.getElementById('top-bar-menu');
+    const btn = document.getElementById('top-bar-menu-btn');
+    if (menu) menu.classList.add('hidden');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('click', outsideCloseTopBarMenu);
+    document.removeEventListener('keydown', escCloseTopBarMenu);
+}
+
+function outsideCloseTopBarMenu(ev) {
+    const wrap = document.querySelector('.top-bar-menu-wrap');
+    if (wrap && !wrap.contains(ev.target)) closeTopBarMenu();
+}
+
+function escCloseTopBarMenu(ev) {
+    if (ev.key === 'Escape') closeTopBarMenu();
+}
+
+// ── About modal ──
+
+function openAboutModal() {
+    document.getElementById('about-modal').classList.remove('hidden');
+}
+
+function closeAboutModal() {
+    document.getElementById('about-modal').classList.add('hidden');
+}
+
+// ── Manage-link prompt (item 10) ──
+
+function openManageLinkPrompt() {
+    const modal = document.getElementById('manage-link-modal');
+    const status = document.getElementById('manage-link-status');
+    const confirm = document.getElementById('manage-link-confirm');
+    document.getElementById('manage-link-email').value = '';
+    status.textContent = '';
+    status.classList.add('hidden');
+    status.classList.remove('error');
+    confirm.disabled = false;
+    confirm.textContent = 'Email me a link';
+    modal.classList.remove('hidden');
+    setTimeout(() => document.getElementById('manage-link-email').focus(), 50);
+}
+
+function closeManageLinkModal() {
+    document.getElementById('manage-link-modal').classList.add('hidden');
+}
+
+async function submitManageLink() {
+    const emailEl = document.getElementById('manage-link-email');
+    const status = document.getElementById('manage-link-status');
+    const confirm = document.getElementById('manage-link-confirm');
+    const email = (emailEl.value || '').trim();
+    if (!email || !email.includes('@') || !email.includes('.')) {
+        status.textContent = 'Please enter a valid email address.';
+        status.classList.remove('hidden');
+        status.classList.add('error');
+        return;
+    }
+    confirm.disabled = true;
+    confirm.textContent = 'Sending...';
+    try {
+        const resp = await fetch('/api/manage-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+        });
+        if (resp.ok) {
+            status.classList.remove('hidden', 'error');
+            status.textContent = 'If that email is subscribed, a manage link is on its way. Check your inbox.';
+            confirm.textContent = 'Done';
+            setTimeout(closeManageLinkModal, 2500);
+        } else {
+            status.classList.remove('hidden');
+            status.classList.add('error');
+            status.textContent = 'Something went wrong. Please try again.';
+            confirm.disabled = false;
+            confirm.textContent = 'Email me a link';
+        }
+    } catch (e) {
+        status.classList.remove('hidden');
+        status.classList.add('error');
+        status.textContent = 'Network error. Please try again.';
+        confirm.disabled = false;
+        confirm.textContent = 'Email me a link';
+    }
 }
 
 function openSubscribeModal(imei) {

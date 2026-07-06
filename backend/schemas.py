@@ -108,6 +108,10 @@ class SubscribeRequest(BaseModel):
     realtime_throttle_minutes: int = 0
 
 
+class ManageLinkRequest(BaseModel):
+    email: str
+
+
 class SubscriptionItem(BaseModel):
     # null device_imei = "all units"
     device_imei: Optional[str] = None
