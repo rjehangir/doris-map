@@ -13,6 +13,7 @@ from loguru import logger
 from sqlalchemy.orm import Session
 from starlette.responses import Response
 
+import email_preview
 import email_service
 import models
 import notifications
@@ -149,6 +150,7 @@ app = FastAPI(
 )
 
 app.mount("/ui", StaticFiles(directory="../frontend", html=True), name="static")
+app.include_router(email_preview.router)
 
 
 # ── Digest scheduler ──

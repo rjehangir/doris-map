@@ -25,5 +25,11 @@ services:
       - key: APP_BASE_URL
         scope: RUN_TIME
         value: "https://doris-tracker.ondigitalocean.app"
+      # Static map image for notification emails (optional).
+      # Set MAPBOX_TOKEN or MAPTILER_KEY; if neither is set, emails omit
+      # the map image (all other content still renders normally).
+      - key: MAPBOX_TOKEN
+        scope: RUN_TIME
+        type: SECRET
     routes:
       - path: /
