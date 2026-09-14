@@ -3,6 +3,7 @@
 Uses an in-memory SQLite database so the production DB is never touched.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -14,8 +15,14 @@ from sqlalchemy.pool import StaticPool
 # Ensure `backend/` is importable without installing as a package.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# Configure the webhook shared secret BEFORE `main` (and `security`) are
+# imported so the fail-closed guard in security.py is satisfied for tests.
+os.environ.setdefault("WEBHOOK_SHARED_SECRET", "test-webhook-secret")
+
 from database import Base
 from main import app, get_db
+
+WEBHOOK_AUTH_HEADERS = {"Authorization": "Bearer test-webhook-secret"}
 
 engine = create_engine(
     "sqlite://",

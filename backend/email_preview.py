@@ -28,7 +28,7 @@ import models
 
 router = APIRouter()
 
-VARIANTS = ("verify", "realtime", "realtime_leak", "digest", "unsubscribed")
+VARIANTS = ("verify", "realtime", "digest", "unsubscribed")
 
 
 def _is_enabled() -> bool:
@@ -64,13 +64,14 @@ def _fake_device() -> SimpleNamespace:
 
 def _fake_message(
     *,
-    leak: bool = False,
     msg_id: int = 4242,
     imei: str = "300234010753370",
     lat: float = 21.432841,
     lon: float = -157.789464,
     battery: Optional[float] = None,
     depth: Optional[float] = None,
+    velocity_dm_s: int = 12,
+    course_deg: int = 45,
     momsn: int = 987,
     transmit_time: str = "26-07-05 22:14:03",
     created_at: Optional[datetime] = None,
@@ -85,11 +86,13 @@ def _fake_message(
         iridium_cep=3,
         latitude=lat,
         longitude=lon,
-        altitude=12.7,
-        satellite_count=6,
-        battery_voltage=battery if battery is not None else (11.85 if leak else 13.42),
-        leak_detected=leak,
-        max_depth=depth if depth is not None else (34.1 if leak else 28.6),
+        message_type="P",
+        message_version="1",
+        velocity_dm_s=velocity_dm_s,
+        course_deg=course_deg,
+        battery_voltage=battery if battery is not None else 13.4,
+        max_depth=depth if depth is not None else 28.0,
+        status_flags=0,
         raw_data="00",
         created_at=created_at or datetime.now(timezone.utc),
     )
@@ -129,7 +132,6 @@ def _fake_rollups() -> list[dict]:
                 lat=21.4331, lon=-157.7898,
                 created_at=now - timedelta(hours=2, minutes=14),
             ),
-            "leak_events": 0,
             "min_battery": 13.10,
             "max_battery": 13.68,
             "max_depth": 28.6,
@@ -148,7 +150,6 @@ def _fake_rollups() -> list[dict]:
                 lat=21.3355, lon=-157.6912,
                 created_at=now - timedelta(hours=6, minutes=42),
             ),
-            "leak_events": 0,
             "min_battery": 14.12,
             "max_battery": 14.24,
             "max_depth": 5.1,
@@ -158,17 +159,16 @@ def _fake_rollups() -> list[dict]:
             "device": dev3,
             "count": 27,
             "first_msg": _fake_message(
-                imei=dev3.imei, msg_id=880, leak=True,
+                imei=dev3.imei, msg_id=880,
                 lat=21.4085, lon=-158.1650,
                 created_at=now - timedelta(hours=22),
             ),
             "last_msg": _fake_message(
-                imei=dev3.imei, msg_id=906, leak=True,
+                imei=dev3.imei, msg_id=906,
                 lat=21.4102, lon=-158.1655,
-                battery=11.20, depth=34.1,
+                battery=11.20, depth=34.0,
                 created_at=now - timedelta(minutes=18),
             ),
-            "leak_events": 4,
             "min_battery": 10.90,
             "max_battery": 12.30,
             "max_depth": 34.1,
@@ -254,7 +254,7 @@ def _render_html(variant: str, subject: str, html: str, text: str, qs: str):
 
 @router.get("/email-preview", response_class=HTMLResponse)
 async def email_preview(
-    type: str = Query("realtime", pattern="^(verify|realtime|realtime_leak|digest|unsubscribed)$"),
+    type: str = Query("realtime", pattern="^(verify|realtime|digest|unsubscribed)$"),
     imei: Optional[str] = None,
     msg_id: Optional[int] = None,
     format: str = Query("html", pattern="^(html|text)$"),
@@ -287,16 +287,12 @@ async def email_preview(
                 base_url=base,
             )
 
-        elif type in ("realtime", "realtime_leak"):
-            leak = type == "realtime_leak"
+        elif type == "realtime":
             if imei:
                 device, message = _load_real(real_db, imei, msg_id)
-                # Override leak flag if the URL asked for the leak variant
-                if leak:
-                    message.leak_detected = True
             else:
                 device = _fake_device()
-                message = _fake_message(leak=leak)
+                message = _fake_message()
             place = "near Kaneohe Bay" if not imei else None
             subject, html, text = email_templates.build_realtime_email(
                 subscriber=subscriber,
@@ -331,7 +327,7 @@ async def email_preview(
 
 @router.get("/email-preview/raw", response_class=HTMLResponse)
 async def email_preview_raw(
-    type: str = Query("realtime", pattern="^(verify|realtime|realtime_leak|digest|unsubscribed)$"),
+    type: str = Query("realtime", pattern="^(verify|realtime|digest|unsubscribed)$"),
     imei: Optional[str] = None,
     msg_id: Optional[int] = None,
     format: str = Query("html", pattern="^(html|text)$"),
@@ -356,15 +352,12 @@ async def email_preview_raw(
                 verify_token="FAKE-VERIFY-TOKEN-xyz789",
                 base_url=base,
             )
-        elif type in ("realtime", "realtime_leak"):
-            leak = type == "realtime_leak"
+        elif type == "realtime":
             if imei:
                 device, message = _load_real(real_db, imei, msg_id)
-                if leak:
-                    message.leak_detected = True
             else:
                 device = _fake_device()
-                message = _fake_message(leak=leak)
+                message = _fake_message()
             subject, html, text = email_templates.build_realtime_email(
                 subscriber=subscriber,
                 sub=_fake_subscription(),

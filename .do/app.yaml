@@ -31,5 +31,25 @@ services:
       - key: MAPBOX_TOKEN
         scope: RUN_TIME
         type: SECRET
+      # Shared secret verified on every /rockblock-webhook post. Accepted
+      # either as `?secret=<value>` on the URL (what Ground Control's portal
+      # supports) or as `Authorization: Bearer <value>`. If unset, the
+      # endpoint returns 503 for every request (fail-closed).
+      - key: WEBHOOK_SHARED_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      # Ground Control's published egress IPs for webhook delivery
+      # (https://docs.groundcontrol.com/iot/rockblock/web-services/integration).
+      # Requests from any other IP are rejected with 403.
+      - key: ROCKBLOCK_ALLOWED_IPS
+        scope: RUN_TIME
+        value: "109.74.196.135,212.71.235.32"
+      # Optional. PEM-encoded RSA public key used to verify the `JWT` field
+      # Ground Control signs into every webhook post. If set, requests
+      # without a valid JWT are rejected with 401. Key published at
+      # https://docs.groundcontrol.com/iot/rockblock/web-services/receiving-mo-message
+      - key: ROCKBLOCK_JWT_PUBLIC_KEY
+        scope: RUN_TIME
+        type: SECRET
     routes:
       - path: /

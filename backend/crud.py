@@ -10,29 +10,68 @@ import models
 import schemas
 
 
-def parse_doris_payload(hex_data: str) -> dict:
-    """Parse hex-encoded plain-text DORIS payload into a dict of typed values.
+def _parse_p1_fields(fields: list[str]) -> dict:
+    """Parse ASCII fields for message type P version 1.
 
-    Expected format after decoding:
-        LAT:21.432552,LON:-157.789331,ALT:20.5,SAT:4,V:14.93,LEAK:0,MAXD:1.1m
+    Expected fields (already split, type/version included):
+        P, 1, lat, lon, velocity_dm_s, course_deg, depth_m, battery_v
     """
-    text = bytes.fromhex(hex_data).decode("ascii")
+    if len(fields) != 8:
+        raise ValueError(f"P/1 payload expected 8 ASCII fields, got {len(fields)}")
+    _, _, lat_s, lon_s, vel_s, course_s, depth_s, batt_s = fields
+    latitude = float(lat_s)
+    longitude = float(lon_s)
+    if not -90.0 <= latitude <= 90.0:
+        raise ValueError(f"latitude out of range: {latitude}")
+    if not -180.0 <= longitude <= 180.0:
+        raise ValueError(f"longitude out of range: {longitude}")
+    return {
+        "latitude": latitude,
+        "longitude": longitude,
+        "velocity_dm_s": int(vel_s),
+        "course_deg": int(course_s),
+        "max_depth": float(int(depth_s)),
+        "battery_voltage": float(batt_s),
+    }
+
+
+_PAYLOAD_PARSERS = {
+    ("P", "1"): _parse_p1_fields,
+}
+
+
+def parse_doris_payload(hex_data: str) -> dict:
+    """Parse a hex-encoded DORIS SBD payload into typed values.
+
+    P/1 layout after ``bytes.fromhex``:
+        P,1,+021.43255,-157.78933,12,045,0028,14.7,<hi><lo>
+
+    Eight ASCII CSV fields, a trailing comma, then exactly two raw flag
+    bytes (big-endian uint16). Lat/lon padding and explicit signs are
+    preferred but not required. Unknown type/version pairs are rejected.
+    """
+    raw = bytes.fromhex(hex_data)
+    if len(raw) < 3 or raw[-3] != 0x2C:
+        raise ValueError("payload must end with comma plus two flag bytes")
+
+    status_flags = int.from_bytes(raw[-2:], "big")
+    text = raw[:-3].decode("ascii")
     logger.debug(f"Decoded payload: {text}")
 
-    fields = {}
-    for pair in text.split(","):
-        key, value = pair.split(":", 1)
-        fields[key.strip()] = value.strip()
+    fields = [part.strip() for part in text.split(",")]
+    if len(fields) < 2:
+        raise ValueError("payload missing type/version")
 
-    return {
-        "latitude": float(fields["LAT"]),
-        "longitude": float(fields["LON"]),
-        "altitude": float(fields["ALT"]),
-        "satellite_count": int(fields["SAT"]),
-        "battery_voltage": float(fields["V"]),
-        "leak_detected": fields["LEAK"] == "1",
-        "max_depth": float(fields["MAXD"].rstrip("m")),
-    }
+    msg_type, msg_version = fields[0], fields[1]
+    parser = _PAYLOAD_PARSERS.get((msg_type, msg_version))
+    if parser is None:
+        raise ValueError(f"unsupported message type/version: {msg_type}/{msg_version}")
+
+    parsed = parser(fields)
+    parsed["message_type"] = msg_type
+    parsed["message_version"] = msg_version
+    parsed["status_flags"] = status_flags
+    return parsed
 
 
 def create_doris_message(
@@ -57,11 +96,13 @@ def create_doris_message(
         iridium_cep=iridium_cep,
         latitude=parsed["latitude"],
         longitude=parsed["longitude"],
-        altitude=parsed["altitude"],
-        satellite_count=parsed["satellite_count"],
+        message_type=parsed["message_type"],
+        message_version=parsed["message_version"],
+        velocity_dm_s=parsed["velocity_dm_s"],
+        course_deg=parsed["course_deg"],
         battery_voltage=parsed["battery_voltage"],
-        leak_detected=parsed["leak_detected"],
         max_depth=parsed["max_depth"],
+        status_flags=parsed["status_flags"],
         raw_data=hex_data,
     )
     db.add(db_message)

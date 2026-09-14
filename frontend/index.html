@@ -139,8 +139,6 @@
         .telem-item svg { width: 13px; height: 13px; fill: #41B9C3; flex-shrink: 0; }
         .telem-item .tv { color: #FFF8A7; font-weight: 600; }
         .telem-item .tu { color: #96EEF2; font-weight: 400; }
-        .telem-item.leak-yes svg { fill: #DD2C1D; }
-        .telem-item.leak-yes .tv { color: #DD2C1D; }
         .telem-item.batt-low svg { fill: #FF9937; }
 
         .detail-track {
@@ -442,7 +440,6 @@
             color: rgba(150, 238, 242, 0.6); font-size: 0.7rem;
             margin-left: 2px; font-weight: 400;
         }
-        .messages-table td.col-leak.leak-yes { color: #DD2C1D; font-weight: 600; }
         .messages-table .row-link {
             color: #41B9C3; text-decoration: none;
         }
@@ -700,11 +697,6 @@
                 display: inline-flex; align-items: center; justify-content: center;
                 background: rgba(65, 185, 195, 0.15); border-radius: 6px;
             }
-            .messages-table td.col-leak.leak-yes {
-                display: inline-block; padding: 2px 8px;
-                background: rgba(221, 44, 29, 0.2);
-                border-radius: 4px; color: #FFD7D2;
-            }
         }
     </style>
 </head>
@@ -875,7 +867,7 @@
 <div class="modal-overlay hidden" id="about-modal" onclick="if(event.target===this)closeAboutModal()">
     <div class="modal-card">
         <h2>About DORIS Tracker</h2>
-        <p>Multi-device camera tracking via Iridium / RockBLOCK satellite messaging. DORIS units report GPS, telemetry, and leak status when they surface; positions and history appear on the map.</p>
+        <p>Multi-device camera tracking via Iridium / RockBLOCK satellite messaging. DORIS units report GPS and telemetry when they surface; positions and history appear on the map.</p>
         <p style="display:flex; align-items:center; gap:14px; margin-top:14px;">
             <img src="img/BlueRobotics-Thruster-Icon-Blue.png" alt="Blue Robotics" style="width:36px; height:36px; border-radius:50%;">
             <img src="img/odl-logo-circle.png" alt="ODL" style="width:36px; height:36px; border-radius:50%;">
@@ -1401,9 +1393,6 @@ function deviceStatus(device) {
     if (isStale) {
         return { color: '#9ca3af', statusClass: 'status-gray', age, isLive: false, isStale: true };
     }
-    if (msg.leak_detected) {
-        return { color: '#DD2C1D', statusClass: 'status-red', age, isLive, isStale };
-    }
     if (msg.battery_voltage != null && msg.battery_voltage < LOW_VOLTAGE_THRESHOLD) {
         return { color: '#FF9937', statusClass: 'status-amber', age, isLive, isStale };
     }
@@ -1499,16 +1488,19 @@ function selectPoint(msg, index, messages, device) {
 
     const telem = [];
     telem.push(`<span class="telem-item">${ICONS.pin}<span class="tv">${msg.latitude.toFixed(5)}, ${msg.longitude.toFixed(5)}</span></span>`);
-    telem.push(`<span class="telem-item">${ICONS.sat}<span class="tv">${msg.satellite_count != null ? msg.satellite_count : '--'}</span></span>`);
+
+    const speedVal = msg.velocity_dm_s != null ? (msg.velocity_dm_s / 10).toFixed(1) : '--';
+    telem.push(`<span class="telem-item">${ICONS.speed}<span class="tv">${speedVal}</span><span class="tu">m/s</span></span>`);
+
+    const courseVal = msg.course_deg != null ? msg.course_deg : '--';
+    telem.push(`<span class="telem-item">${ICONS.course}<span class="tv">${courseVal}</span><span class="tu">°</span></span>`);
 
     const battLow = msg.battery_voltage != null && msg.battery_voltage < LOW_VOLTAGE_THRESHOLD;
-    const batVal = msg.battery_voltage != null ? msg.battery_voltage.toFixed(2) : '--';
+    const batVal = msg.battery_voltage != null ? msg.battery_voltage.toFixed(1) : '--';
     telem.push(`<span class="telem-item${battLow ? ' batt-low' : ''}">${ICONS.bat}<span class="tv">${batVal}</span><span class="tu">V</span></span>`);
 
-    telem.push(`<span class="telem-item">${ICONS.depth}<span class="tv">${msg.max_depth != null ? msg.max_depth.toFixed(1) : '--'}</span><span class="tu">m</span></span>`);
-
-    const leakCls = msg.leak_detected ? ' leak-yes' : '';
-    telem.push(`<span class="telem-item${leakCls}">${ICONS.leak}<span class="tv">${msg.leak_detected ? 'LEAK' : 'OK'}</span></span>`);
+    const depVal = msg.max_depth != null ? Math.round(msg.max_depth) : '--';
+    telem.push(`<span class="telem-item">${ICONS.depth}<span class="tv">${depVal}</span><span class="tu">m</span></span>`);
 
     telem.push(`<span class="telem-item">${ICONS.clock}<span class="tv">${msg.created_at ? utc(msg.created_at).format('MMM D, h:mm A') : '--'}</span></span>`);
 
@@ -1750,11 +1742,11 @@ function updateDirectionArrow() {
 }
 
 const ICONS = {
-    sat: '<svg viewBox="0 0 24 24"><path d="M19.07 4.93l-1.41 1.41A8.014 8.014 0 0 1 20 12c0 2.21-.9 4.21-2.34 5.66l1.41 1.41A9.969 9.969 0 0 0 22 12c0-2.76-1.12-5.26-2.93-7.07zM17.24 6.76l-1.41 1.41A4.007 4.007 0 0 1 17 12c0 1.1-.45 2.1-1.17 2.83l1.41 1.41A5.976 5.976 0 0 0 19 12c0-1.66-.67-3.16-1.76-4.24zM12 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM6.93 4.93L5.52 3.52A9.969 9.969 0 0 0 2 12c0 2.76 1.12 5.26 2.93 7.07l1.41-1.41A8.014 8.014 0 0 1 4 12c0-2.21.9-4.21 2.34-5.66l-.41-1.41zM8.17 7.17L6.76 5.76A5.976 5.976 0 0 0 5 12c0 1.66.67 3.16 1.76 4.24l1.41-1.41A4.007 4.007 0 0 1 7 12c0-1.1.45-2.1 1.17-2.83z"/></svg>',
+    speed: '<svg viewBox="0 0 24 24"><path d="M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.27-10.44zm-9.79 6.84a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83z"/></svg>',
+    course: '<svg viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>',
     bat: '<svg viewBox="0 0 24 24"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg>',
     pin: '<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>',
     depth: '<svg viewBox="0 0 24 24"><path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8z"/></svg>',
-    leak: '<svg viewBox="0 0 24 24"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2C20 10.48 17.33 6.55 12 2z"/></svg>',
     clock: '<svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>',
     copy: '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>',
     maps: '<svg viewBox="0 0 24 24"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>',
@@ -2276,11 +2268,10 @@ function renderMessagesTable(messages) {
         const iridiumCell = (m.iridium_latitude != null && m.iridium_longitude != null)
             ? `${iLat}, ${iLon}${iCep ? ` <span class="col-cep">${iCep}</span>` : ''}`
             : '--';
-        const sat = m.satellite_count != null ? m.satellite_count : '--';
-        const bat = m.battery_voltage != null ? m.battery_voltage.toFixed(2) : '--';
-        const dep = m.max_depth != null ? m.max_depth.toFixed(1) : '--';
-        const leakCls = m.leak_detected ? ' leak-yes' : '';
-        const leak = m.leak_detected ? 'LEAK' : 'OK';
+        const speed = m.velocity_dm_s != null ? (m.velocity_dm_s / 10).toFixed(1) : '--';
+        const course = m.course_deg != null ? m.course_deg : '--';
+        const bat = m.battery_voltage != null ? m.battery_voltage.toFixed(1) : '--';
+        const dep = m.max_depth != null ? Math.round(m.max_depth) : '--';
         const momsn = m.momsn != null ? m.momsn : '--';
         const locCell = (m.latitude != null && m.longitude != null)
             ? `<td class="col-location" data-col="Location" data-lat="${m.latitude}" data-lon="${m.longitude}" title="Tap to override" onclick="event.stopPropagation();editLocationLabel(this)"><span class="loc-text">…</span></td>`
@@ -2289,16 +2280,20 @@ function renderMessagesTable(messages) {
             ? `${bat}<span class="col-unit">V</span>` : '--';
         const depCell = m.max_depth != null
             ? `${dep}<span class="col-unit">m</span>` : '--';
+        const speedCell = m.velocity_dm_s != null
+            ? `${speed}<span class="col-unit">m/s</span>` : '--';
+        const courseCell = m.course_deg != null
+            ? `${course}<span class="col-unit">°</span>` : '--';
         return `<tr onclick="openMessageOnMap('${escapeHtml(m.device_imei)}', ${m.id})">
             <td data-col="Time">${time}</td>
             <td class="col-name" data-col="Vehicle">${name}</td>
             ${locCell}
             <td class="col-coord" data-col="GPS">${lat}, ${lon}</td>
             <td class="col-coord" data-col="Iridium">${iridiumCell}</td>
-            <td class="col-num" data-col="Sat">${sat}</td>
+            <td class="col-num" data-col="Speed">${speedCell}</td>
+            <td class="col-num" data-col="Course">${courseCell}</td>
             <td class="col-num" data-col="Battery">${batCell}</td>
             <td class="col-num" data-col="Depth">${depCell}</td>
-            <td class="col-leak${leakCls}" data-col="Leak">${leak}</td>
             <td class="col-num" data-col="MOMSN">${momsn}</td>
             <td><span class="row-link" title="Open on map">${ICONS.pin}</span></td>
         </tr>`;
@@ -2310,10 +2305,10 @@ function renderMessagesTable(messages) {
             <th title="Approximate place name from OpenStreetMap (tap a cell to override)">Location</th>
             <th title="GPS fix reported by the DORIS device">GPS Lat / Lon</th>
             <th title="Approximate location estimated by the Iridium satellite network">Iridium Lat / Lon</th>
-            <th class="col-num-h">Sat</th>
+            <th class="col-num-h">Speed</th>
+            <th class="col-num-h">Course</th>
             <th class="col-num-h">Battery</th>
             <th class="col-num-h">Depth</th>
-            <th>Leak</th>
             <th class="col-num-h">MOMSN</th>
             <th></th>
         </tr></thead>

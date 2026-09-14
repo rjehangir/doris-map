@@ -237,11 +237,13 @@ def _make_message(db_session, imei=KNOWN_IMEI, lat=21.43, lon=-157.79) -> DorisM
         iridium_cep=3,
         latitude=lat,
         longitude=lon,
-        altitude=10.0,
-        satellite_count=6,
+        message_type="P",
+        message_version="1",
+        velocity_dm_s=12,
+        course_deg=45,
         battery_voltage=14.5,
-        leak_detected=False,
         max_depth=5.0,
+        status_flags=0,
         raw_data="00",
     )
     db_session.add(msg)

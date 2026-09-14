@@ -19,20 +19,32 @@ BASE_LAT = 21.3069
 BASE_LON = -157.8583
 
 
-def make_payload(lat: float, lon: float, alt: float, sat: int, voltage: float, leak: int, max_depth: float) -> str:
-    text = f"LAT:{lat:.6f},LON:{lon:.6f},ALT:{alt:.1f},SAT:{sat},V:{voltage:.2f},LEAK:{leak},MAXD:{max_depth:.1f}m"
-    return text.encode("ascii").hex()
+def make_payload(
+    lat: float,
+    lon: float,
+    voltage: float,
+    max_depth: int,
+    velocity_dm_s: int,
+    course_deg: int,
+    flags: bytes = b"\x00\x00",
+) -> str:
+    lat_s = f"{lat:+010.5f}"
+    lon_s = f"{lon:+010.5f}"
+    text = (
+        f"P,1,{lat_s},{lon_s},{velocity_dm_s:02d},{course_deg:03d},"
+        f"{max_depth:04d},{voltage:04.1f},"
+    )
+    return (text.encode("ascii") + flags).hex()
 
 
 def send_message(imei: str, lat: float, lon: float):
     payload_hex = make_payload(
         lat=lat,
         lon=lon,
-        alt=round(random.uniform(0, 50), 1),
-        sat=random.randint(3, 12),
-        voltage=round(random.uniform(11.5, 15.0), 2),
-        leak=random.choice([0, 0, 0, 0, 1]),  # 20% chance of leak
-        max_depth=round(random.uniform(0.5, 30.0), 1),
+        voltage=round(random.uniform(11.5, 15.0), 1),
+        max_depth=random.randint(1, 30),
+        velocity_dm_s=random.randint(0, 25),
+        course_deg=random.randint(0, 359),
     )
 
     form_data = {

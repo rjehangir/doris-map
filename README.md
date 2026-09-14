@@ -55,11 +55,13 @@ Restart the app after changes.
 
 ## Message Format
 
-Devices send plain-text payloads via Iridium SBD:
+Devices send a compact comma-separated P/1 payload via Iridium SBD (fits in 50 bytes). After hex-decoding the RockBLOCK `data` field:
 
 ```
-LAT:21.432552,LON:-157.789331,ALT:20.5,SAT:4,V:14.93,LEAK:0,MAXD:1.1m
+P,1,+021.43255,-157.78933,12,045,0028,14.7,<2 flag bytes>
 ```
+
+Fields: type (`P`), version (`1`), signed lat/lon, velocity (dm/s), course (degrees), depth achieved (m), battery (V), then two raw status-flag bytes (reserved, big-endian uint16).
 
 ## Production Deployment
 

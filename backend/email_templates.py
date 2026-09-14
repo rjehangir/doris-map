@@ -307,15 +307,13 @@ def _telemetry_rows(message: models.DorisMessage) -> list[tuple[str, str]]:
     if message.transmit_time:
         rows.append(("Reported", format_transmit_time(str(message.transmit_time))))
     if message.battery_voltage is not None:
-        rows.append(("Battery", f"{message.battery_voltage:.2f} V"))
-    if message.leak_detected is not None:
-        rows.append(("Leak detected", "YES" if message.leak_detected else "no"))
+        rows.append(("Battery", f"{message.battery_voltage:.1f} V"))
     if message.max_depth is not None:
-        rows.append(("Max depth", f"{message.max_depth:.2f} m"))
-    if message.altitude is not None:
-        rows.append(("Altitude", f"{message.altitude:.1f} m"))
-    if message.satellite_count is not None:
-        rows.append(("GPS satellites", str(message.satellite_count)))
+        rows.append(("Max depth", f"{message.max_depth:.0f} m"))
+    if message.velocity_dm_s is not None:
+        rows.append(("GPS speed", f"{message.velocity_dm_s / 10:.1f} m/s"))
+    if message.course_deg is not None:
+        rows.append(("GPS course", f"{message.course_deg}°"))
     if message.momsn is not None:
         rows.append(("MOMSN", str(message.momsn)))
     return rows
@@ -359,19 +357,11 @@ def build_realtime_email(
 ) -> tuple[str, str, str]:
     lat = message.latitude
     lon = message.longitude
-    leak = bool(message.leak_detected)
     place = place_label or ""  # "near Kaneohe Bay" or ""
     battery_v = message.battery_voltage
     low_battery = battery_v is not None and battery_v < LOW_BATTERY_THRESHOLD_V
 
-    # Subject: leak takes precedence, then place, then plain check-in.
-    if leak:
-        subject_bits = [f"{device.name}: LEAK DETECTED"]
-        if place:
-            subject_bits.append(place)
-        subject = " — ".join(subject_bits)
-    else:
-        subject = f"{device.name} {place}" if place else f"{device.name} position update"
+    subject = f"{device.name} {place}" if place else f"{device.name} position update"
 
     deep = deep_link(base_url, device.imei, message.id)
     gmap = google_maps_url(lat, lon)
@@ -381,32 +371,13 @@ def build_realtime_email(
     manage_link = manage_url(base_url, subscriber.manage_token)
 
     banners: list[str] = []
-    if leak:
-        banners.append(
-            _banner(
-                _PALETTE["danger_bg"],
-                _PALETTE["danger_border"],
-                _PALETTE["danger_text"],
-                f"⚠ Leak detected on {html_lib.escape(device.name)}.",
-            )
-        )
-    if low_battery and not leak:
+    if low_battery:
         banners.append(
             _banner(
                 _PALETTE["warn_bg"],
                 _PALETTE["warn_border"],
                 _PALETTE["warn_text"],
-                f"Low battery: {battery_v:.2f}V (threshold {LOW_BATTERY_THRESHOLD_V:.1f}V).",
-            )
-        )
-    elif low_battery and leak:
-        # Combine into the leak banner tail so we don't stack two red-ish blocks.
-        banners.append(
-            _banner(
-                _PALETTE["warn_bg"],
-                _PALETTE["warn_border"],
-                _PALETTE["warn_text"],
-                f"Battery is also low: {battery_v:.2f}V.",
+                f"Low battery: {battery_v:.1f}V (threshold {LOW_BATTERY_THRESHOLD_V:.1f}V).",
             )
         )
 
@@ -464,11 +435,11 @@ def build_realtime_email(
 """
 
     text_lines = [
-        f"{device.name}{' — LEAK DETECTED' if leak else ''}{' — ' + place if place else ''}",
+        f"{device.name}{' — ' + place if place else ''}",
         f"IMEI: {device.imei}",
     ]
     if low_battery:
-        text_lines.append(f"[Low battery: {battery_v:.2f}V]")
+        text_lines.append(f"[Low battery: {battery_v:.1f}V]")
     text_lines += [
         "",
         f"Position: {format_decimal(lat, lon)}",
@@ -490,8 +461,6 @@ def build_realtime_email(
 
     # Preheader: informative first-line summary for Gmail's inbox preview
     preheader_bits: list[str] = []
-    if leak:
-        preheader_bits.append("LEAK")
     preheader_bits.append(f"{device.name} checked in")
     if place:
         preheader_bits.append(place)
@@ -514,18 +483,13 @@ def build_digest_email(
     unsubscribe_url: Optional[str],
     now: Optional[datetime] = None,
 ) -> tuple[str, str, str]:
-    """Each rollup dict: {device, count, first_msg, last_msg, leak_events,
+    """Each rollup dict: {device, count, first_msg, last_msg,
     min_battery, max_battery, max_depth, place_label}."""
     rollup_list = list(rollups)
     now = now or datetime.now(timezone.utc)
     span = "Daily" if frequency == "daily" else "Weekly"
     unit_count = len(rollup_list)
-    leak_count = sum(1 for r in rollup_list if r.get("leak_events"))
-    subject = (
-        f"{span} DORIS digest — {leak_count} leak alert(s) · {unit_count} unit(s)"
-        if leak_count
-        else f"{span} DORIS digest — {unit_count} unit(s)"
-    )
+    subject = f"{span} DORIS digest — {unit_count} unit(s)"
     manage_link = manage_url(base_url, subscriber.manage_token)
 
     dateline = now.strftime("For %A, %b %-d, %Y (UTC)")
@@ -537,15 +501,6 @@ def build_digest_email(
         last: models.DorisMessage = r["last_msg"]
         deep = deep_link(base_url, device.imei, last.id)
         place = r.get("place_label") or ""
-        has_leak = bool(r.get("leak_events"))
-
-        leak_badge = (
-            f'<span style="display:inline-block; padding:3px 9px; background:{_PALETTE["danger_bg"]}; '
-            f'color:{_PALETTE["danger_text"]}; border:1px solid {_PALETTE["danger_border"]}; '
-            f'border-radius:6px; font-size:11px; font-weight:700; margin-left:8px; letter-spacing:0.5px; vertical-align:middle;">LEAK</span>'
-            if has_leak
-            else ""
-        )
 
         last_seen_dt = getattr(last, "created_at", None) or _parse_rockblock_time(
             getattr(last, "transmit_time", "") or ""
@@ -554,9 +509,13 @@ def build_digest_email(
 
         detail_lines: list[str] = []
         if r.get("min_battery") is not None and r.get("max_battery") is not None:
-            detail_lines.append(f'Battery: {r["min_battery"]:.2f}–{r["max_battery"]:.2f} V')
+            detail_lines.append(f'Battery: {r["min_battery"]:.1f}–{r["max_battery"]:.1f} V')
         if r.get("max_depth") is not None:
-            detail_lines.append(f'Max depth: {r["max_depth"]:.2f} m')
+            detail_lines.append(f'Max depth: {r["max_depth"]:.0f} m')
+        if getattr(last, "velocity_dm_s", None) is not None:
+            detail_lines.append(f"GPS speed: {last.velocity_dm_s / 10:.1f} m/s")
+        if getattr(last, "course_deg", None) is not None:
+            detail_lines.append(f"GPS course: {last.course_deg}°")
         detail_html = "".join(
             f'<div style="color:{_PALETTE["muted"]}; font-size:13px; margin-top:2px;">{html_lib.escape(d)}</div>'
             for d in detail_lines
@@ -569,15 +528,11 @@ def build_digest_email(
             meta_bits.append(place)
         meta_line = " · ".join(html_lib.escape(m) for m in meta_bits)
 
-        card_border = (
-            _PALETTE["danger_border"] if has_leak else _PALETTE["row_border"]
-        )
-
         cards_html.append(
             f"""
 <tr><td style="padding:8px 24px;">
-  <div style="background:{_PALETTE['row_bg']}; border:1px solid {card_border}; border-radius:10px; padding:14px 16px;">
-    <div style="font-weight:600; font-size:16px; color:{_PALETTE['text']};">{html_lib.escape(device.name)}{leak_badge}</div>
+  <div style="background:{_PALETTE['row_bg']}; border:1px solid {_PALETTE['row_border']}; border-radius:10px; padding:14px 16px;">
+    <div style="font-weight:600; font-size:16px; color:{_PALETTE['text']};">{html_lib.escape(device.name)}</div>
     <div style="color:{_PALETTE['muted']}; font-size:12px; margin:4px 0 8px;">{meta_line}</div>
     <div style="font-size:14px; color:{_PALETTE['text']};">Last position: {html_lib.escape(format_decimal(last.latitude, last.longitude))}</div>
     {detail_html}
@@ -587,31 +542,28 @@ def build_digest_email(
         )
 
         block = [
-            f"{device.name}{' [LEAK]' if has_leak else ''}",
+            device.name,
             f"  {r['count']} message(s)"
             + (f" · last update {last_seen}" if last_seen else "")
             + (f" · {place}" if place else ""),
             f"  Last position: {format_decimal(last.latitude, last.longitude)}",
         ]
         if r.get("min_battery") is not None and r.get("max_battery") is not None:
-            block.append(f"  Battery: {r['min_battery']:.2f}–{r['max_battery']:.2f} V")
+            block.append(f"  Battery: {r['min_battery']:.1f}–{r['max_battery']:.1f} V")
         if r.get("max_depth") is not None:
-            block.append(f"  Max depth: {r['max_depth']:.2f} m")
+            block.append(f"  Max depth: {r['max_depth']:.0f} m")
+        if getattr(last, "velocity_dm_s", None) is not None:
+            block.append(f"  GPS speed: {last.velocity_dm_s / 10:.1f} m/s")
+        if getattr(last, "course_deg", None) is not None:
+            block.append(f"  GPS course: {last.course_deg}°")
         block.append(f"  Open: {deep}")
         text_blocks.append("\n".join(block))
-
-    heading_suffix = ""
-    if leak_count:
-        heading_suffix = (
-            f' <span style="color:{_PALETTE["danger_text"]}; font-size:14px; font-weight:600;">'
-            f'· {leak_count} leak alert(s)</span>'
-        )
 
     inner = f"""
 <tr><td style="padding:22px 24px 4px;">
   <h2 style="margin:0; font-size:22px; color:{_PALETTE['text']};">{span} DORIS digest</h2>
   <div style="color:{_PALETTE['muted']}; font-size:13px; margin-top:4px;">{html_lib.escape(dateline)}</div>
-  <div style="color:{_PALETTE['text']}; font-size:14px; margin-top:6px;">{unit_count} unit(s) reported in{heading_suffix}</div>
+  <div style="color:{_PALETTE['text']}; font-size:14px; margin-top:6px;">{unit_count} unit(s) reported in</div>
 </td></tr>
 {''.join(cards_html)}
 {_footer_links(manage_link, unsubscribe_url)}
@@ -620,8 +572,7 @@ def build_digest_email(
     text_lines = [
         f"{span} DORIS digest",
         dateline,
-        f"{unit_count} unit(s) reported in"
-        + (f" · {leak_count} leak alert(s)" if leak_count else ""),
+        f"{unit_count} unit(s) reported in",
         "",
         "\n\n".join(text_blocks),
         "",
@@ -630,10 +581,7 @@ def build_digest_email(
     if unsubscribe_url:
         text_lines.append(f"Unsubscribe:          {unsubscribe_url}")
 
-    preheader_bits = [f"{unit_count} unit(s) reported in"]
-    if leak_count:
-        preheader_bits.insert(0, f"{leak_count} leak alert(s)")
-    preheader = " · ".join(preheader_bits) + f" · {dateline}"
+    preheader = f"{unit_count} unit(s) reported in · {dateline}"
 
     return subject, _wrapper(inner, preheader=preheader), "\n".join(text_lines)
 

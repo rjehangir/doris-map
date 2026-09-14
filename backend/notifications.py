@@ -208,7 +208,6 @@ def _build_rollup(
         return None
     batteries = [m.battery_voltage for m in msgs if m.battery_voltage is not None]
     depths = [m.max_depth for m in msgs if m.max_depth is not None]
-    leak_events = sum(1 for m in msgs if m.leak_detected)
     last = msgs[-1]
     place_label = _lookup_place_label(db, last.latitude, last.longitude)
     return {
@@ -216,7 +215,6 @@ def _build_rollup(
         "count": len(msgs),
         "first_msg": msgs[0],
         "last_msg": last,
-        "leak_events": leak_events,
         "min_battery": min(batteries) if batteries else None,
         "max_battery": max(batteries) if batteries else None,
         "max_depth": max(depths) if depths else None,

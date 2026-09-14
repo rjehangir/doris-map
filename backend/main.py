@@ -6,10 +6,11 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import uvicorn
-from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, FastAPI, Form, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 from starlette.responses import Response
 
@@ -18,7 +19,6 @@ import email_service
 import models
 import notifications
 from crud import (
-    auto_register_device,
     create_dive_start,
     create_doris_message,
     create_verify_token,
@@ -52,11 +52,13 @@ from schemas import (
     GeocodeOverrideRequest,
     LocationLabelResponse,
     ManageLinkRequest,
+    RockblockWebhookIn,
     SubscribeRequest,
     SubscriptionItem,
     SubscriptionsResponse,
     SubscriptionsUpdate,
 )
+from security import verify_rockblock_webhook
 
 
 class PrettyJSONResponse(Response):
@@ -144,6 +146,36 @@ def migrate_subscription_tables():
 
 migrate_subscription_tables()
 
+
+def migrate_doris_message_p1_columns():
+    """Add P/1 telemetry columns and drop altitude/sat/leak on existing DBs."""
+    from sqlalchemy import inspect as sa_inspect, text
+
+    insp = sa_inspect(engine)
+    if "doris_messages" not in insp.get_table_names():
+        return
+    cols = {c["name"] for c in insp.get_columns("doris_messages")}
+    adds = [
+        ("message_type", "VARCHAR"),
+        ("message_version", "VARCHAR"),
+        ("velocity_dm_s", "INTEGER"),
+        ("course_deg", "INTEGER"),
+        ("status_flags", "INTEGER"),
+    ]
+    drops = ("altitude", "satellite_count", "leak_detected")
+    with engine.begin() as conn:
+        for name, typ in adds:
+            if name not in cols:
+                conn.execute(text(f"ALTER TABLE doris_messages ADD COLUMN {name} {typ}"))
+                logger.info(f"Added '{name}' column to doris_messages")
+        for name in drops:
+            if name in cols:
+                conn.execute(text(f"ALTER TABLE doris_messages DROP COLUMN {name}"))
+                logger.info(f"Dropped '{name}' column from doris_messages")
+
+
+migrate_doris_message_p1_columns()
+
 app = FastAPI(
     title="DORIS Tracker API",
     description="Multi-device camera tracking system via Iridium / RockBLOCK.",
@@ -219,6 +251,7 @@ async def root():
 
 @app.post("/rockblock-webhook")
 async def rockblock_webhook(
+    request: Request,
     background_tasks: BackgroundTasks,
     imei: str = Form(...),
     serial: str = Form(...),
@@ -228,32 +261,70 @@ async def rockblock_webhook(
     iridium_longitude: float = Form(...),
     iridium_cep: int = Form(...),
     data: str = Form(...),
+    JWT: Optional[str] = Form(None),
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
-    """Receive a RockBLOCK webhook (form-encoded) from Rock Seven."""
-    device = get_device_by_imei(db, imei)
-    if not device:
-        device = auto_register_device(db, imei)
-    logger.info(f"Received message from {device.name} (IMEI {imei})")
+    """Receive a RockBLOCK webhook (form-encoded) from Rock Seven.
+
+    Authentication is enforced via ``verify_rockblock_webhook``: at minimum
+    the request must present ``Authorization: Bearer <WEBHOOK_SHARED_SECRET>``.
+    Optional IP allowlist and JWT verification are applied if configured.
+    """
+    verify_rockblock_webhook(
+        request=request,
+        authorization_header=authorization,
+        jwt_token=JWT,
+    )
 
     try:
-        message = create_doris_message(
-            db=db,
+        payload = RockblockWebhookIn(
             imei=imei,
+            serial=serial,
             momsn=momsn,
             transmit_time=transmit_time,
             iridium_latitude=iridium_latitude,
             iridium_longitude=iridium_longitude,
             iridium_cep=iridium_cep,
-            hex_data=data,
+            data=data,
         )
-        background_tasks.add_task(
-            notifications.dispatch_realtime_for_message_id, message.id
+    except (ValidationError, ValueError) as e:
+        logger.warning(f"Rejected webhook: input validation failed: {e}")
+        raise HTTPException(status_code=422, detail="invalid webhook payload")
+
+    device = get_device_by_imei(db, payload.imei)
+    if not device:
+        client_ip = request.headers.get("x-forwarded-for") or (
+            request.client.host if request.client else "?"
         )
-        return {"status": "ok", "id": message.id}
-    except Exception as e:
-        logger.error(f"Failed to process message from IMEI {imei}: {e}")
-        return {"status": "error", "detail": str(e)}
+        logger.warning(
+            f"Rejected webhook: unregistered IMEI {payload.imei} (ip={client_ip})"
+        )
+        raise HTTPException(status_code=403, detail="unknown device")
+
+    logger.info(f"Received message from {device.name} (IMEI {payload.imei})")
+
+    try:
+        message = create_doris_message(
+            db=db,
+            imei=payload.imei,
+            momsn=payload.momsn,
+            transmit_time=payload.transmit_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            iridium_latitude=payload.iridium_latitude,
+            iridium_longitude=payload.iridium_longitude,
+            iridium_cep=payload.iridium_cep,
+            hex_data=payload.data,
+        )
+    except (ValueError, KeyError) as e:
+        logger.error(
+            f"Malformed DORIS payload from IMEI {payload.imei}: {e}"
+        )
+        raise HTTPException(status_code=400, detail="malformed payload")
+
+    background_tasks.add_task(
+        notifications.dispatch_realtime_for_message_id, message.id
+    )
+    return {"status": "ok", "id": message.id}
 
 
 @app.get("/api/devices")

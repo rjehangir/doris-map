@@ -8,3 +8,4 @@ loguru>=0.7.0
 gunicorn>=21.2.0
 requests>=2.28.0
 apscheduler>=3.10.0
+pyjwt[crypto]>=2.8.0
