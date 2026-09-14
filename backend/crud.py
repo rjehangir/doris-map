@@ -10,68 +10,177 @@ import models
 import schemas
 
 
-def _parse_p1_fields(fields: list[str]) -> dict:
-    """Parse ASCII fields for message type P version 1.
+def _parse_coord(value: Optional[str], lo: float, hi: float) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        parsed = float(value.strip())
+    except (TypeError, ValueError):
+        return None
+    if lo <= parsed <= hi:
+        return parsed
+    return None
 
-    Expected fields (already split, type/version included):
-        P, 1, lat, lon, velocity_dm_s, course_deg, depth_m, battery_v
+
+def _type_or_version_token(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    token = value.strip()
+    if len(token) == 1 and token.isalnum():
+        return token
+    return None
+
+
+def _optional_int(value: Optional[str]) -> Optional[int]:
+    if not value:
+        return None
+    text = value.strip().rstrip("mMdD")
+    try:
+        return int(text, 10)
+    except ValueError:
+        try:
+            return int(float(text))
+        except ValueError:
+            logger.debug("Ignoring malformed integer field: {!r}", value)
+            return None
+
+
+def _optional_float(value: Optional[str]) -> Optional[float]:
+    if not value:
+        return None
+    text = value.strip().rstrip("vV")
+    try:
+        return float(text)
+    except ValueError:
+        logger.debug("Ignoring malformed float field: {!r}", value)
+        return None
+
+
+def _looks_like_ascii_number(raw: bytes) -> bool:
+    try:
+        text = raw.decode("ascii").strip()
+    except UnicodeDecodeError:
+        return False
+    if not text:
+        return False
+    try:
+        float(text)
+        return True
+    except ValueError:
+        return False
+
+
+def _split_ascii_and_flags(raw: bytes) -> tuple[bytes, Optional[int]]:
+    """Peel optional trailing flag bytes; leave the ASCII CSV prefix.
+
+    Canonical P/1 ends with ``,<hi><lo>``. That comma is at ``raw[-3]``, so a
+    ``0x2C`` *inside* the flags is still parsed correctly. A trailing NUL or
+    CR/LF is stripped only when the canonical ending is not already present.
     """
-    if len(fields) != 8:
-        raise ValueError(f"P/1 payload expected 8 ASCII fields, got {len(fields)}")
-    _, _, lat_s, lon_s, vel_s, course_s, depth_s, batt_s = fields
-    latitude = float(lat_s)
-    longitude = float(lon_s)
-    if not -90.0 <= latitude <= 90.0:
-        raise ValueError(f"latitude out of range: {latitude}")
-    if not -180.0 <= longitude <= 180.0:
-        raise ValueError(f"longitude out of range: {longitude}")
-    return {
-        "latitude": latitude,
-        "longitude": longitude,
-        "velocity_dm_s": int(vel_s),
-        "course_deg": int(course_s),
-        "max_depth": float(int(depth_s)),
-        "battery_voltage": float(batt_s),
-    }
+    raw = raw.rstrip(b"\r\n")
+
+    def try_peel(buf: bytes) -> Optional[tuple[bytes, Optional[int]]]:
+        if len(buf) >= 3 and buf[-3] == 0x2C:
+            tail = buf[-2:]
+            if not _looks_like_ascii_number(tail):
+                return buf[:-3], int.from_bytes(tail, "big")
+        if buf.endswith(b","):
+            return buf[:-1], None
+        return None
+
+    peeled = try_peel(raw)
+    if peeled is None:
+        stripped = raw.rstrip(b"\x00")
+        if stripped != raw:
+            peeled = try_peel(stripped)
+            if peeled is None:
+                return stripped, None
+    if peeled is None:
+        return raw, None
+    return peeled
 
 
-_PAYLOAD_PARSERS = {
-    ("P", "1"): _parse_p1_fields,
-}
+def _named_fields(text: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for pair in text.split(","):
+        if ":" not in pair:
+            continue
+        key, value = pair.split(":", 1)
+        fields[key.strip().upper()] = value.strip()
+    return fields
+
+
+def _parse_named_lat_lon(text: str) -> Optional[tuple[float, float]]:
+    named = _named_fields(text)
+    lat = _parse_coord(named.get("LAT"), -90.0, 90.0)
+    lon = _parse_coord(named.get("LON"), -180.0, 180.0)
+    if lat is None or lon is None:
+        return None
+    return lat, lon
 
 
 def parse_doris_payload(hex_data: str) -> dict:
     """Parse a hex-encoded DORIS SBD payload into typed values.
 
-    P/1 layout after ``bytes.fromhex``:
+    Canonical P/1 layout after ``bytes.fromhex``:
         P,1,+021.43255,-157.78933,12,045,0028,14.7,<hi><lo>
 
-    Eight ASCII CSV fields, a trailing comma, then exactly two raw flag
-    bytes (big-endian uint16). Lat/lon padding and explicit signs are
-    preferred but not required. Unknown type/version pairs are rejected.
+    Acceptance is loose: a valid latitude and longitude are enough to keep
+    the message. Type/version, optional telemetry, padding, flags, and extra
+    trailing bytes are best-effort. Unknown type/version still uses the P/1
+    field order when lat/lon are in those slots.
     """
     raw = bytes.fromhex(hex_data)
-    if len(raw) < 3 or raw[-3] != 0x2C:
-        raise ValueError("payload must end with comma plus two flag bytes")
+    if not raw:
+        raise ValueError("empty payload")
 
-    status_flags = int.from_bytes(raw[-2:], "big")
-    text = raw[:-3].decode("ascii")
+    prefix, status_flags = _split_ascii_and_flags(raw)
+    text = prefix.decode("ascii", errors="replace").strip().rstrip(",")
     logger.debug(f"Decoded payload: {text}")
 
     fields = [part.strip() for part in text.split(",")]
-    if len(fields) < 2:
-        raise ValueError("payload missing type/version")
+    result = {
+        "message_type": _type_or_version_token(fields[0]) if fields else None,
+        "message_version": _type_or_version_token(fields[1]) if len(fields) >= 2 else None,
+        "latitude": None,
+        "longitude": None,
+        "velocity_dm_s": None,
+        "course_deg": None,
+        "max_depth": None,
+        "battery_voltage": None,
+        "status_flags": status_flags,
+    }
 
-    msg_type, msg_version = fields[0], fields[1]
-    parser = _PAYLOAD_PARSERS.get((msg_type, msg_version))
-    if parser is None:
-        raise ValueError(f"unsupported message type/version: {msg_type}/{msg_version}")
+    lat = _parse_coord(fields[2], -90.0, 90.0) if len(fields) >= 4 else None
+    lon = _parse_coord(fields[3], -180.0, 180.0) if len(fields) >= 4 else None
+    if lat is None or lon is None:
+        named = _parse_named_lat_lon(text)
+        if named:
+            lat, lon = named
 
-    parsed = parser(fields)
-    parsed["message_type"] = msg_type
-    parsed["message_version"] = msg_version
-    parsed["status_flags"] = status_flags
-    return parsed
+    if lat is None or lon is None:
+        raise ValueError("payload missing a valid latitude/longitude")
+
+    result["latitude"] = lat
+    result["longitude"] = lon
+    if len(fields) >= 5:
+        result["velocity_dm_s"] = _optional_int(fields[4])
+    if len(fields) >= 6:
+        result["course_deg"] = _optional_int(fields[5])
+    if len(fields) >= 7:
+        depth = _optional_int(fields[6])
+        result["max_depth"] = float(depth) if depth is not None else None
+    if len(fields) >= 8:
+        result["battery_voltage"] = _optional_float(fields[7])
+
+    named = _named_fields(text)
+    if result["battery_voltage"] is None and "V" in named:
+        result["battery_voltage"] = _optional_float(named["V"])
+    if result["max_depth"] is None and "MAXD" in named:
+        depth = _optional_int(named["MAXD"])
+        result["max_depth"] = float(depth) if depth is not None else None
+
+    return result
 
 
 def create_doris_message(

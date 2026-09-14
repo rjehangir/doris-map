@@ -86,31 +86,69 @@ class TestParseDorisPayload:
         with pytest.raises(ValueError):
             parse_doris_payload("ZZZZ")
 
-    def test_rejects_old_key_value_format(self):
+    def test_accepts_old_key_value_format_for_position(self):
         old = "LAT:21.432841,LON:-157.789464,ALT:12.7,SAT:6,V:14.71,LEAK:0,MAXD:28.6m"
-        with pytest.raises(ValueError):
-            parse_doris_payload(old.encode("ascii").hex())
+        result = parse_doris_payload(old.encode("ascii").hex())
+        assert result["latitude"] == pytest.approx(21.432841)
+        assert result["longitude"] == pytest.approx(-157.789464)
+        assert result["battery_voltage"] == pytest.approx(14.71)
+        assert result["max_depth"] == pytest.approx(28.0)
+        assert result["message_type"] is None
+        assert result["message_version"] is None
 
-    def test_rejects_truncated_payload(self):
+    def test_rejects_truncated_payload_without_longitude(self):
         truncated = "P,1,+021.43255".encode("ascii").hex()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="latitude/longitude"):
             parse_doris_payload(truncated)
 
-    def test_rejects_missing_flag_bytes(self):
+    def test_accepts_position_without_flag_bytes(self):
         missing_flags = "P,1,+021.43255,-157.78933,12,045,0028,14.7".encode("ascii").hex()
-        with pytest.raises(ValueError):
-            parse_doris_payload(missing_flags)
+        result = parse_doris_payload(missing_flags)
+        assert result["latitude"] == pytest.approx(21.43255)
+        assert result["longitude"] == pytest.approx(-157.78933)
+        assert result["velocity_dm_s"] == 12
+        assert result["status_flags"] is None
 
-    def test_rejects_unknown_message_type(self):
-        with pytest.raises(ValueError, match="unsupported message type/version"):
-            parse_doris_payload(encode_p1(msg_type="X"))
+    def test_accepts_position_only(self):
+        hex_data = "P,1,+021.43255,-157.78933".encode("ascii").hex()
+        result = parse_doris_payload(hex_data)
+        assert result["latitude"] == pytest.approx(21.43255)
+        assert result["longitude"] == pytest.approx(-157.78933)
+        assert result["velocity_dm_s"] is None
+        assert result["course_deg"] is None
+        assert result["max_depth"] is None
+        assert result["battery_voltage"] is None
+        assert result["status_flags"] is None
 
-    def test_rejects_unknown_version(self):
-        with pytest.raises(ValueError, match="unsupported message type/version"):
-            parse_doris_payload(encode_p1(version="2"))
+    def test_accepts_unknown_message_type_if_position_present(self):
+        result = parse_doris_payload(encode_p1(msg_type="X"))
+        assert result["message_type"] == "X"
+        assert result["latitude"] == pytest.approx(21.43255)
+        assert result["longitude"] == pytest.approx(-157.78933)
 
-    def test_rejects_latitude_out_of_range(self):
-        with pytest.raises(ValueError, match="latitude out of range"):
+    def test_accepts_unknown_version_if_position_present(self):
+        result = parse_doris_payload(encode_p1(version="2"))
+        assert result["message_version"] == "2"
+        assert result["latitude"] == pytest.approx(21.43255)
+
+    def test_keeps_position_when_optional_fields_are_malformed(self):
+        hex_data = encode_p1(velocity="xx", course="", depth="??", battery="n/a")
+        result = parse_doris_payload(hex_data)
+        assert result["latitude"] == pytest.approx(21.43255)
+        assert result["longitude"] == pytest.approx(-157.78933)
+        assert result["velocity_dm_s"] is None
+        assert result["course_deg"] is None
+        assert result["max_depth"] is None
+        assert result["battery_voltage"] is None
+
+    def test_accepts_trailing_nul_after_flags(self):
+        raw = bytes.fromhex(encode_p1(flags=b"\xff\x01")) + b"\x00"
+        result = parse_doris_payload(raw.hex())
+        assert result["latitude"] == pytest.approx(21.43255)
+        assert result["status_flags"] == 0xFF01
+
+    def test_rejects_latitude_out_of_range_without_named_coords(self):
+        with pytest.raises(ValueError, match="latitude/longitude"):
             parse_doris_payload(encode_p1(lat="+091.00000"))
 
 
@@ -155,15 +193,19 @@ class TestRockblockWebhook:
         # transmit_time is now stored in normalized ISO-8601 UTC form.
         assert row.transmit_time == "2026-04-14T12:00:00Z"
 
-    def test_old_format_returns_400(self, client, db_session):
+    def test_old_format_with_position_is_stored(self, client, db_session):
         old = "LAT:21.432841,LON:-157.789464,ALT:12.7,SAT:6,V:14.71,LEAK:0,MAXD:28.6m"
         resp = client.post(
             "/rockblock-webhook",
             data=_build_form_data(hex_data=old.encode("ascii").hex()),
             headers=WEBHOOK_AUTH_HEADERS,
         )
-        assert resp.status_code == 400
-        assert db_session.query(DorisMessage).count() == 0
+        assert resp.status_code == 200
+        row = db_session.get(DorisMessage, resp.json()["id"])
+        assert row.latitude == pytest.approx(21.432841)
+        assert row.longitude == pytest.approx(-157.789464)
+        assert row.battery_voltage == pytest.approx(14.71)
+        assert row.max_depth == pytest.approx(28.0)
 
     def test_missing_auth_returns_401(self, client):
         resp = client.post("/rockblock-webhook", data=_build_form_data())
