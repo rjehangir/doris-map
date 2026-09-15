@@ -538,8 +538,8 @@ def _simple_html(title: str, body: str) -> HTMLResponse:
         f"""<!DOCTYPE html>
 <html><head><meta charset=\"utf-8\"><title>{title}</title>
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
-<link rel=\"icon\" type=\"image/png\" href=\"/ui/img/favicon.png\">
-<link rel=\"apple-touch-icon\" href=\"/ui/img/favicon.png\">
+<link rel=\"icon\" type=\"image/png\" href=\"/ui/img/favicon.png?v=2\">
+<link rel=\"apple-touch-icon\" href=\"/ui/img/favicon.png?v=2\">
 <style>
   body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           background: #0E2446; color: #fff; min-height: 100vh; margin: 0;
