@@ -8,9 +8,10 @@ module enforces a strict fail-closed policy:
   writes from anyone.
 - If ``ROCKBLOCK_ALLOWED_IPS`` is set (comma-separated), the client IP (from
   X-Forwarded-For behind DO's proxy) must be in the allowlist.
-- If ``ROCKBLOCK_JWT_PUBLIC_KEY`` is set, the ``JWT`` form field must be a
-  valid RS256 token signed by that key (this is the JWT Ground Control signs
-  into each webhook post).
+- If ``ROCKBLOCK_JWT_PUBLIC_KEY`` is set **and** the post includes a ``JWT``
+  field, that token is verified as RS256. Ground Control's form-encoded
+  ``HTTP_POST`` delivery does not send ``JWT`` (JSON delivery does), so a
+  missing token is allowed; a present but invalid token is rejected.
 
 Ground Control's RockBLOCK webhook system does NOT let you attach a custom
 ``Authorization`` header, so the shared secret is accepted in either of two
@@ -83,10 +84,7 @@ def verify_rockblock_webhook(
             raise HTTPException(status_code=403, detail="forbidden source")
 
     jwt_public_key = os.getenv("ROCKBLOCK_JWT_PUBLIC_KEY", "").strip()
-    if jwt_public_key:
-        if not jwt_token:
-            logger.warning(f"Rejected webhook: missing JWT (ip={client_ip})")
-            raise HTTPException(status_code=401, detail="missing JWT")
+    if jwt_public_key and jwt_token:
         try:
             import jwt as pyjwt  # imported lazily so tests without JWT still work
         except ImportError as e:  # pragma: no cover -- deployment misconfig

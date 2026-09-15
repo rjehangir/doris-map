@@ -168,6 +168,40 @@ class TestRockblockWebhook:
         assert body["status"] == "ok"
         assert "id" in body
 
+    def test_jwt_public_key_set_but_form_post_without_jwt_is_ok(self, client, monkeypatch):
+        """Ground Control HTTP_POST does not include a JWT field."""
+        monkeypatch.setenv(
+            "ROCKBLOCK_JWT_PUBLIC_KEY",
+            "-----BEGIN PUBLIC KEY-----\nMIIB\n-----END PUBLIC KEY-----",
+        )
+        resp = client.post(
+            "/rockblock-webhook",
+            data=_build_form_data(),
+            headers=WEBHOOK_AUTH_HEADERS,
+        )
+        assert resp.status_code == 200
+
+    def test_invalid_jwt_rejected_when_token_is_present(self, client, monkeypatch):
+        import sys
+        from types import SimpleNamespace
+
+        def _reject(*_args, **_kwargs):
+            raise ValueError("bad token")
+
+        monkeypatch.setenv(
+            "ROCKBLOCK_JWT_PUBLIC_KEY",
+            "-----BEGIN PUBLIC KEY-----\nMIIB\n-----END PUBLIC KEY-----",
+        )
+        monkeypatch.setitem(sys.modules, "jwt", SimpleNamespace(decode=_reject))
+        form = _build_form_data()
+        form["JWT"] = "not-a-real-token"
+        resp = client.post(
+            "/rockblock-webhook",
+            data=form,
+            headers=WEBHOOK_AUTH_HEADERS,
+        )
+        assert resp.status_code == 401
+
     def test_message_stored_in_database(self, client, db_session):
         resp = client.post(
             "/rockblock-webhook",
