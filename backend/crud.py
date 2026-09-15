@@ -9,6 +9,24 @@ import geocode
 import models
 import schemas
 
+# Stored in subscriptions.device_imei for "every current and future unit".
+# Prefer this over SQL NULL so unique constraints and equality matches work
+# the same on SQLite and PostgreSQL.
+ALL_UNITS_IMEI = "all"
+_ALL_UNITS_ALIASES = {"", "all", "__all__", "null", "none", "*"}
+
+
+def is_all_units_imei(imei: Optional[str]) -> bool:
+    if imei is None:
+        return True
+    return imei.strip().lower() in _ALL_UNITS_ALIASES
+
+
+def normalize_subscription_imei(imei: Optional[str]) -> str:
+    if is_all_units_imei(imei):
+        return ALL_UNITS_IMEI
+    return imei.strip()
+
 
 def _parse_coord(value: Optional[str], lo: float, hi: float) -> Optional[float]:
     if value is None:
@@ -529,13 +547,12 @@ def upsert_subscription(
     realtime_throttle_minutes: int,
 ) -> models.Subscription:
     """Insert or update the subscriber's row for this device (or "all")."""
+    device_imei = normalize_subscription_imei(device_imei)
     row = (
         db.query(models.Subscription)
         .filter(
             models.Subscription.subscriber_id == subscriber.id,
-            models.Subscription.device_imei.is_(None)
-            if device_imei is None
-            else models.Subscription.device_imei == device_imei,
+            models.Subscription.device_imei == device_imei,
         )
         .first()
     )
@@ -567,7 +584,7 @@ def replace_subscriptions(
     result: list[models.Subscription] = []
     seen_keys: set[Optional[str]] = set()
     for item in items:
-        key = item.device_imei
+        key = normalize_subscription_imei(item.device_imei)
         if key in seen_keys:
             continue
         seen_keys.add(key)

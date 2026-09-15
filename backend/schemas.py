@@ -144,7 +144,7 @@ class ManageLinkRequest(BaseModel):
 
 
 class SubscriptionItem(BaseModel):
-    # null device_imei = "all units"
+    # "all" (preferred) or null means every current and future unit
     device_imei: Optional[str] = None
     wants_realtime: bool = True
     wants_digest: bool = False

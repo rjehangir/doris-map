@@ -68,6 +68,7 @@ def _matching_subscriptions(
             models.Subscriber.unsubscribed_at.is_(None),
             or_(
                 models.Subscription.device_imei == imei,
+                models.Subscription.device_imei == crud.ALL_UNITS_IMEI,
                 models.Subscription.device_imei.is_(None),
             ),
         )
@@ -182,7 +183,7 @@ def _devices_for_subscriber(
     digest_subs = [s for s in subscriber.subscriptions if s.wants_digest]
     if not digest_subs:
         return []
-    if any(s.device_imei is None for s in digest_subs):
+    if any(crud.is_all_units_imei(s.device_imei) for s in digest_subs):
         return crud.get_all_devices(db)
     imeis = {s.device_imei for s in digest_subs if s.device_imei}
     if not imeis:

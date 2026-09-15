@@ -75,10 +75,23 @@ class TestSubscribeFlow:
 
         token = db_session.query(EmailToken).filter_by(subscriber_id=sub.id, purpose="verify").first()
         assert token is not None
+        rows = db_session.query(Subscription).filter_by(subscriber_id=sub.id).all()
+        assert len(rows) == 1
+        assert rows[0].device_imei == crud.ALL_UNITS_IMEI
         assert any(
             "Confirm" in (e.get("subject") or "") and e["to"] == "alice@example.com"
             for e in stub_email_sender
         )
+
+    def test_subscribe_all_units_aliases(self, client, db_session):
+        for i, imei in enumerate((None, "", "all", "ALL", "__all__")):
+            email = f"alias{i}@example.com"
+            resp = _post_subscribe(client, email=email, imei=imei)
+            assert resp.status_code == 200
+            sub = db_session.query(Subscriber).filter_by(email=email).first()
+            rows = db_session.query(Subscription).filter_by(subscriber_id=sub.id).all()
+            assert len(rows) == 1
+            assert rows[0].device_imei == crud.ALL_UNITS_IMEI
 
     def test_subscribe_normalizes_email_case(self, client, db_session):
         _post_subscribe(client, email="ALICE@Example.COM")
@@ -153,6 +166,28 @@ class TestSubscriptionsCrud:
         assert len(data["subscriptions"]) == 1
         assert data["subscriptions"][0]["device_imei"] == KNOWN_IMEI
 
+    def test_list_all_units_subscription_returns_token(self, client, db_session):
+        _post_subscribe(client, imei="all")
+        sub = db_session.query(Subscriber).filter_by(email="alice@example.com").first()
+        resp = client.get(f"/api/subscriptions?token={sub.manage_token}")
+        assert resp.status_code == 200
+        assert resp.json()["subscriptions"][0]["device_imei"] == crud.ALL_UNITS_IMEI
+
+    def test_put_all_units_token_does_not_require_device(self, client, db_session):
+        _post_subscribe(client, imei=KNOWN_IMEI)
+        sub = db_session.query(Subscriber).filter_by(email="alice@example.com").first()
+        resp = client.put(
+            f"/api/subscriptions?token={sub.manage_token}",
+            json={"subscriptions": [
+                {"device_imei": "all", "wants_realtime": True, "wants_digest": False,
+                 "digest_frequency": "daily", "digest_hour_utc": 13, "realtime_throttle_minutes": 0},
+            ]},
+        )
+        assert resp.status_code == 200
+        rows = db_session.query(Subscription).filter_by(subscriber_id=sub.id).all()
+        assert len(rows) == 1
+        assert rows[0].device_imei == crud.ALL_UNITS_IMEI
+
     def test_put_subscriptions_replaces_set(self, client, db_session):
         _post_subscribe(client, imei=KNOWN_IMEI)
         sub = db_session.query(Subscriber).filter_by(email="alice@example.com").first()
@@ -166,7 +201,7 @@ class TestSubscriptionsCrud:
         assert resp.status_code == 200
         rows = db_session.query(Subscription).filter_by(subscriber_id=sub.id).all()
         assert len(rows) == 1
-        assert rows[0].device_imei is None
+        assert rows[0].device_imei == crud.ALL_UNITS_IMEI
         assert rows[0].digest_frequency == "weekly"
         assert rows[0].realtime_throttle_minutes == 5
 
@@ -284,11 +319,49 @@ class TestRealtimeDispatch:
         assert "/api/unsubscribe" in stub_email_sender[-1]["unsubscribe_url"]
 
     def test_all_units_subscriber_matches(self, db_session, stub_email_sender):
-        _make_subscriber(db_session, imei=None)
+        _make_subscriber(db_session, imei="all")
         msg = _make_message(db_session)
 
         sent = notifications.dispatch_realtime(db_session, msg)
         assert sent == 1
+
+    def test_legacy_null_all_units_row_still_matches(self, db_session, stub_email_sender):
+        """Pre-fix rows stored SQL NULL instead of the 'all' token."""
+        sub = crud.get_or_create_subscriber(db_session, "legacy@example.com")
+        sub.verified_at = datetime.now(timezone.utc)
+        db_session.commit()
+        db_session.add(
+            Subscription(
+                subscriber_id=sub.id,
+                device_imei=None,
+                wants_realtime=True,
+                wants_digest=False,
+                digest_frequency="daily",
+                digest_hour_utc=13,
+                realtime_throttle_minutes=0,
+            )
+        )
+        db_session.commit()
+        msg = _make_message(db_session)
+        assert notifications.dispatch_realtime(db_session, msg) == 1
+
+    def test_http_subscribe_all_units_then_dispatch(self, client, db_session, stub_email_sender):
+        resp = _post_subscribe(client, imei="all")
+        assert resp.status_code == 200
+        subscriber = db_session.query(Subscriber).filter_by(email="alice@example.com").first()
+        token = (
+            db_session.query(EmailToken)
+            .filter_by(subscriber_id=subscriber.id, purpose="verify")
+            .first()
+        )
+        client.get(f"/api/verify?token={token.token}", follow_redirects=False)
+        db_session.refresh(subscriber)
+        stub_email_sender.clear()
+
+        msg = _make_message(db_session)
+        sent = notifications.dispatch_realtime(db_session, msg)
+        assert sent == 1
+        assert stub_email_sender[-1]["to"] == "alice@example.com"
 
     def test_unverified_subscriber_skipped(self, db_session, stub_email_sender):
         _make_subscriber(db_session, verified=False)

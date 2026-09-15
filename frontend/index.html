@@ -2545,6 +2545,12 @@ async function submitManageLink() {
     }
 }
 
+function isAllUnitsImei(imei) {
+    if (imei == null) return true;
+    const v = String(imei).trim().toLowerCase();
+    return v === '' || v === 'all' || v === '__all__' || v === 'null' || v === 'none' || v === '*';
+}
+
 function openSubscribeModal(imei) {
     subscribeContextImei = imei || null;
     const title = document.getElementById('subscribe-title');
@@ -2673,7 +2679,8 @@ function renderManageList() {
 
     const subsByKey = new Map();
     manageData.subscriptions.forEach(s => {
-        subsByKey.set(s.device_imei == null ? '__all__' : s.device_imei, s);
+        const key = isAllUnitsImei(s.device_imei) ? '__all__' : s.device_imei;
+        subsByKey.set(key, s);
     });
 
     const allSub = subsByKey.get('__all__');
@@ -2724,7 +2731,7 @@ async function saveManage() {
         if (!c.checked) return;
         const imei = c.dataset.imei;
         items.push({
-            device_imei: imei === '__all__' ? null : imei,
+            device_imei: imei === '__all__' ? 'all' : imei,
             wants_realtime: realtime,
             wants_digest: digest,
             digest_frequency: freq,

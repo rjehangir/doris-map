@@ -99,7 +99,7 @@ class Subscription(Base):
     subscriber_id = Column(
         Integer, ForeignKey("subscribers.id", ondelete="CASCADE"), index=True, nullable=False
     )
-    # NULL device_imei means "all units"
+    # Token "all" means every current and future unit (legacy NULL still accepted)
     device_imei = Column(String, index=True, nullable=True)
     wants_realtime = Column(Boolean, default=True, nullable=False)
     wants_digest = Column(Boolean, default=False, nullable=False)

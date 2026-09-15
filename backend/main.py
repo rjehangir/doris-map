@@ -19,6 +19,7 @@ import email_service
 import models
 import notifications
 from crud import (
+    ALL_UNITS_IMEI,
     create_dive_start,
     create_doris_message,
     create_verify_token,
@@ -36,6 +37,7 @@ from crud import (
     get_subscriber_by_manage_token,
     get_unsubscribe_token,
     get_verify_token,
+    is_all_units_imei,
     mark_unsubscribed,
     replace_subscriptions,
     set_user_location_label,
@@ -175,6 +177,58 @@ def migrate_doris_message_p1_columns():
 
 
 migrate_doris_message_p1_columns()
+
+
+def migrate_all_units_subscription_token():
+    """Rewrite legacy NULL/empty 'all units' rows to device_imei='all'.
+
+    SQL NULL is a poor sentinel: PostgreSQL unique constraints treat NULLs as
+    distinct, and dispatch matching against a real IMEI never equals NULL
+    unless the query explicitly uses IS NULL. A stored token is unambiguous.
+    """
+    from sqlalchemy import inspect as sa_inspect
+
+    insp = sa_inspect(engine)
+    if "subscriptions" not in insp.get_table_names():
+        return
+    db = SessionLocal()
+    try:
+        from collections import defaultdict
+
+        converted = 0
+        deleted = 0
+        by_subscriber: dict[int, list] = defaultdict(list)
+        for row in db.query(models.Subscription).all():
+            if is_all_units_imei(row.device_imei):
+                by_subscriber[row.subscriber_id].append(row)
+        for group in by_subscriber.values():
+            keep = next(
+                (r for r in group if r.device_imei == ALL_UNITS_IMEI),
+                None,
+            )
+            if keep is None:
+                keep = group[0]
+                keep.device_imei = ALL_UNITS_IMEI
+                converted += 1
+            for row in group:
+                if row is keep:
+                    continue
+                db.delete(row)
+                deleted += 1
+        if converted or deleted:
+            db.commit()
+            logger.info(
+                "Normalized all-units subscriptions: "
+                f"{converted} updated, {deleted} duplicate(s) removed"
+            )
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"Could not normalize all-units subscriptions: {e}")
+    finally:
+        db.close()
+
+
+migrate_all_units_subscription_token()
 
 app = FastAPI(
     title="DORIS Tracker API",
@@ -491,8 +545,8 @@ async def subscribe(
         raise HTTPException(status_code=400, detail="invalid email")
 
     device_imei: Optional[str]
-    if body.imei in (None, "", "all"):
-        device_imei = None
+    if is_all_units_imei(body.imei):
+        device_imei = ALL_UNITS_IMEI
     else:
         device_imei = body.imei
         if not get_device_by_imei(db, device_imei):
@@ -597,13 +651,17 @@ async def list_subscriptions(token: str = Query(...), db: Session = Depends(get_
     subscriber = get_subscriber_by_manage_token(db, token)
     if not subscriber:
         raise HTTPException(status_code=404, detail="invalid token")
+    items = []
+    for s in subscriber.subscriptions:
+        item = SubscriptionItem.model_validate(s)
+        if is_all_units_imei(item.device_imei):
+            item = item.model_copy(update={"device_imei": ALL_UNITS_IMEI})
+        items.append(item)
     return SubscriptionsResponse(
         email=subscriber.email,
         verified=subscriber.verified_at is not None,
         unsubscribed=subscriber.unsubscribed_at is not None,
-        subscriptions=[
-            SubscriptionItem.model_validate(s) for s in subscriber.subscriptions
-        ],
+        subscriptions=items,
     ).model_dump()
 
 
@@ -616,12 +674,13 @@ async def update_subscriptions(
     subscriber = get_subscriber_by_manage_token(db, token)
     if not subscriber:
         raise HTTPException(status_code=404, detail="invalid token")
-    # Validate that referenced IMEIs exist (None = "all" is always allowed).
+    # Validate that referenced IMEIs exist ("all" is always allowed).
     for item in body.subscriptions:
-        if item.device_imei and not get_device_by_imei(db, item.device_imei):
-            raise HTTPException(
-                status_code=400, detail=f"unknown device {item.device_imei}"
-            )
+        if item.device_imei and not is_all_units_imei(item.device_imei):
+            if not get_device_by_imei(db, item.device_imei):
+                raise HTTPException(
+                    status_code=400, detail=f"unknown device {item.device_imei}"
+                )
     replace_subscriptions(db, subscriber, body.subscriptions)
     if subscriber.unsubscribed_at is not None and body.subscriptions:
         subscriber.unsubscribed_at = None
