@@ -24,6 +24,7 @@ from crud import (
     create_doris_message,
     create_verify_token,
     delete_dive_start,
+    drop_covered_device_subscriptions,
     get_all_devices,
     get_device_by_imei,
     get_device_messages,
@@ -229,6 +230,33 @@ def migrate_all_units_subscription_token():
 
 
 migrate_all_units_subscription_token()
+
+
+def prune_device_subscriptions_covered_by_all():
+    """Drop per-device rows for anyone who already has an all-units subscription."""
+    from sqlalchemy import inspect as sa_inspect
+
+    insp = sa_inspect(engine)
+    if "subscriptions" not in insp.get_table_names():
+        return
+    db = SessionLocal()
+    try:
+        deleted = 0
+        for subscriber in db.query(models.Subscriber).all():
+            deleted += drop_covered_device_subscriptions(db, subscriber)
+        if deleted:
+            db.commit()
+            logger.info(
+                f"Removed {deleted} per-device subscription(s) covered by all-units"
+            )
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"Could not prune covered device subscriptions: {e}")
+    finally:
+        db.close()
+
+
+prune_device_subscriptions_covered_by_all()
 
 app = FastAPI(
     title="DORIS Tracker API",

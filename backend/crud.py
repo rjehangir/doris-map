@@ -535,6 +535,51 @@ def get_unsubscribe_token(db: Session, token: str) -> Optional[models.EmailToken
     )
 
 
+def _all_units_subscription(
+    db: Session, subscriber: models.Subscriber
+) -> Optional[models.Subscription]:
+    rows = (
+        db.query(models.Subscription)
+        .filter(models.Subscription.subscriber_id == subscriber.id)
+        .all()
+    )
+    for row in rows:
+        if is_all_units_imei(row.device_imei):
+            return row
+    return None
+
+
+def drop_covered_device_subscriptions(
+    db: Session, subscriber: models.Subscriber
+) -> int:
+    """If an all-units row exists, delete per-device (and duplicate all) rows.
+
+    All-units already covers every device, so extra rows only cause duplicate
+    emails. Returns the number of rows deleted (caller must commit).
+    """
+    db.flush()
+    rows = (
+        db.query(models.Subscription)
+        .filter(models.Subscription.subscriber_id == subscriber.id)
+        .all()
+    )
+    keep = next((r for r in rows if r.device_imei == ALL_UNITS_IMEI), None)
+    if keep is None:
+        keep = next((r for r in rows if is_all_units_imei(r.device_imei)), None)
+    if keep is None:
+        return 0
+    if keep.device_imei != ALL_UNITS_IMEI:
+        keep.device_imei = ALL_UNITS_IMEI
+        db.flush()
+    deleted = 0
+    for row in rows:
+        if row.id == keep.id:
+            continue
+        db.delete(row)
+        deleted += 1
+    return deleted
+
+
 def upsert_subscription(
     db: Session,
     subscriber: models.Subscriber,
@@ -546,8 +591,16 @@ def upsert_subscription(
     digest_hour_utc: int,
     realtime_throttle_minutes: int,
 ) -> models.Subscription:
-    """Insert or update the subscriber's row for this device (or "all")."""
+    """Insert or update the subscriber's row for this device (or "all").
+
+    An all-units row subsumes per-device rows: subscribing to a specific
+    unit while already on "all" is a no-op, and subscribing to "all"
+    drops any per-device rows.
+    """
     device_imei = normalize_subscription_imei(device_imei)
+    existing_all = _all_units_subscription(db, subscriber)
+    if device_imei != ALL_UNITS_IMEI and existing_all is not None:
+        return existing_all
     row = (
         db.query(models.Subscription)
         .filter(
@@ -567,6 +620,8 @@ def upsert_subscription(
     row.digest_frequency = digest_frequency if digest_frequency in ("daily", "weekly") else "daily"
     row.digest_hour_utc = max(0, min(23, digest_hour_utc))
     row.realtime_throttle_minutes = max(0, realtime_throttle_minutes)
+    if device_imei == ALL_UNITS_IMEI:
+        drop_covered_device_subscriptions(db, subscriber)
     db.commit()
     db.refresh(row)
     return row
@@ -577,7 +632,14 @@ def replace_subscriptions(
     subscriber: models.Subscriber,
     items: Iterable[schemas.SubscriptionItem],
 ) -> list[models.Subscription]:
-    """Replace the subscriber's whole subscription set with ``items``."""
+    """Replace the subscriber's whole subscription set with ``items``.
+
+    If the set includes all-units, per-device entries are discarded.
+    """
+    items = list(items)
+    all_item = next((i for i in items if is_all_units_imei(i.device_imei)), None)
+    if all_item is not None:
+        items = [all_item]
     db.query(models.Subscription).filter(
         models.Subscription.subscriber_id == subscriber.id
     ).delete()

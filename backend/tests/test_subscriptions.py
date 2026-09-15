@@ -188,6 +188,36 @@ class TestSubscriptionsCrud:
         assert len(rows) == 1
         assert rows[0].device_imei == crud.ALL_UNITS_IMEI
 
+    def test_put_all_plus_device_keeps_only_all(self, client, db_session):
+        _post_subscribe(client, imei=KNOWN_IMEI)
+        sub = db_session.query(Subscriber).filter_by(email="alice@example.com").first()
+        resp = client.put(
+            f"/api/subscriptions?token={sub.manage_token}",
+            json={"subscriptions": [
+                {"device_imei": "all", "wants_realtime": True, "wants_digest": False,
+                 "digest_frequency": "daily", "digest_hour_utc": 13, "realtime_throttle_minutes": 0},
+                {"device_imei": KNOWN_IMEI, "wants_realtime": True, "wants_digest": False,
+                 "digest_frequency": "daily", "digest_hour_utc": 13, "realtime_throttle_minutes": 0},
+            ]},
+        )
+        assert resp.status_code == 200
+        rows = db_session.query(Subscription).filter_by(subscriber_id=sub.id).all()
+        assert [r.device_imei for r in rows] == [crud.ALL_UNITS_IMEI]
+
+    def test_subscribe_specific_ignored_when_already_all(self, client, db_session):
+        _post_subscribe(client, imei="all")
+        _post_subscribe(client, imei=KNOWN_IMEI)
+        sub = db_session.query(Subscriber).filter_by(email="alice@example.com").first()
+        rows = db_session.query(Subscription).filter_by(subscriber_id=sub.id).all()
+        assert [r.device_imei for r in rows] == [crud.ALL_UNITS_IMEI]
+
+    def test_subscribe_all_replaces_specific(self, client, db_session):
+        _post_subscribe(client, imei=KNOWN_IMEI)
+        _post_subscribe(client, imei="all")
+        sub = db_session.query(Subscriber).filter_by(email="alice@example.com").first()
+        rows = db_session.query(Subscription).filter_by(subscriber_id=sub.id).all()
+        assert [r.device_imei for r in rows] == [crud.ALL_UNITS_IMEI]
+
     def test_put_subscriptions_replaces_set(self, client, db_session):
         _post_subscribe(client, imei=KNOWN_IMEI)
         sub = db_session.query(Subscriber).filter_by(email="alice@example.com").first()
@@ -324,6 +354,27 @@ class TestRealtimeDispatch:
 
         sent = notifications.dispatch_realtime(db_session, msg)
         assert sent == 1
+
+    def test_all_plus_device_rows_send_one_email(self, db_session, stub_email_sender):
+        sub = crud.get_or_create_subscriber(db_session, "alice@example.com")
+        sub.verified_at = datetime.now(timezone.utc)
+        db_session.commit()
+        for imei in (crud.ALL_UNITS_IMEI, KNOWN_IMEI):
+            db_session.add(
+                Subscription(
+                    subscriber_id=sub.id,
+                    device_imei=imei,
+                    wants_realtime=True,
+                    wants_digest=False,
+                    digest_frequency="daily",
+                    digest_hour_utc=13,
+                    realtime_throttle_minutes=0,
+                )
+            )
+        db_session.commit()
+        msg = _make_message(db_session)
+        assert notifications.dispatch_realtime(db_session, msg) == 1
+        assert len(stub_email_sender) == 1
 
     def test_legacy_null_all_units_row_still_matches(self, db_session, stub_email_sender):
         """Pre-fix rows stored SQL NULL instead of the 'all' token."""

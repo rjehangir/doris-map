@@ -55,6 +55,21 @@ def get_or_create_unsubscribe_token(db: Session, subscriber: models.Subscriber) 
 # ── Realtime dispatch ──
 
 
+def _one_subscription_per_subscriber(
+    subs: list[models.Subscription],
+) -> list[models.Subscription]:
+    """Prefer an all-units row when a subscriber also has a per-device row."""
+    chosen: dict[int, models.Subscription] = {}
+    for sub in subs:
+        prev = chosen.get(sub.subscriber_id)
+        if prev is None or (
+            crud.is_all_units_imei(sub.device_imei)
+            and not crud.is_all_units_imei(prev.device_imei)
+        ):
+            chosen[sub.subscriber_id] = sub
+    return list(chosen.values())
+
+
 def _matching_subscriptions(
     db: Session, imei: str
 ) -> list[models.Subscription]:
@@ -127,7 +142,9 @@ def dispatch_realtime(db: Session, message: models.DorisMessage) -> int:
         logger.warning("dispatch_realtime: unknown device IMEI {}", message.device_imei)
         return 0
 
-    subs = _matching_subscriptions(db, message.device_imei)
+    subs = _one_subscription_per_subscriber(
+        _matching_subscriptions(db, message.device_imei)
+    )
     if not subs:
         return 0
 

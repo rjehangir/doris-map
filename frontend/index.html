@@ -2588,6 +2588,9 @@ document.addEventListener('change', e => {
         document.getElementById('subscribe-digest-fields').style.display =
             e.target.checked ? 'block' : 'none';
     }
+    if (e.target && e.target.closest && e.target.closest('#manage-list')) {
+        syncManageUnitChecks(e.target);
+    }
 });
 
 async function submitSubscribe() {
@@ -2706,16 +2709,34 @@ function renderManageList() {
         </label>
     `);
     devicesData.forEach(d => {
-        const has = subsByKey.has(d.imei);
+        const has = !allSub && subsByKey.has(d.imei);
         rows.push(`
             <label class="manage-row ${has ? 'subscribed' : ''}">
-                <input type="checkbox" data-imei="${escapeHtml(d.imei)}" ${has ? 'checked' : ''}>
+                <input type="checkbox" data-imei="${escapeHtml(d.imei)}" ${has ? 'checked' : ''} ${allSub ? 'disabled' : ''}>
                 <div><div style="font-weight:600; color:#fff;">${escapeHtml(d.name)}</div>
                 <div style="font-size:0.74rem; color:rgba(150,238,242,0.65);">IMEI ${escapeHtml(d.imei)}</div></div>
             </label>
         `);
     });
     list.innerHTML = rows.join('');
+}
+
+function syncManageUnitChecks(changed) {
+    const allBox = document.querySelector('#manage-list input[data-imei="__all__"]');
+    const deviceBoxes = document.querySelectorAll('#manage-list input[data-imei]:not([data-imei="__all__"])');
+    if (!allBox) return;
+    if (changed && changed.dataset && changed.dataset.imei !== '__all__' && changed.checked) {
+        allBox.checked = false;
+    }
+    const allOn = allBox.checked;
+    deviceBoxes.forEach(c => {
+        if (allOn) c.checked = false;
+        c.disabled = allOn;
+        const row = c.closest('.manage-row');
+        if (row) row.classList.toggle('subscribed', c.checked);
+    });
+    const allRow = allBox.closest('.manage-row');
+    if (allRow) allRow.classList.toggle('subscribed', allOn);
 }
 
 async function saveManage() {
@@ -2728,7 +2749,7 @@ async function saveManage() {
     const checks = document.querySelectorAll('#manage-list input[type=checkbox]');
     const items = [];
     checks.forEach(c => {
-        if (!c.checked) return;
+        if (!c.checked || c.disabled) return;
         const imei = c.dataset.imei;
         items.push({
             device_imei: imei === '__all__' ? 'all' : imei,
